@@ -1,0 +1,30 @@
+{
+  "name": "gitgraph",
+  "version": "0.0.0",
+  "description": "CLI que mostra o grafo de branches de um repositório git no terminal",
+  "type": "module",
+  "bin": {
+    "gitgraph": "dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.tsx",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
