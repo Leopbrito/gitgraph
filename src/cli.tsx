@@ -30,7 +30,12 @@ async function main() {
   // Refs are read on every load: after a checkout, HEAD has moved.
   const graph = async (revs: string[], maxCount: number | undefined) => {
     const [commits, refs] = await Promise.all([
-      loadCommits(cwd, revs.length === 0 ? {all: true, maxCount} : {revs, maxCount}),
+      loadCommits(
+        cwd,
+        revs.length === 0
+          ? {all: true, maxCount, order: options.order}
+          : {revs, maxCount, order: options.order},
+      ),
       loadRefs(cwd),
     ]);
     return {rows: layoutGraph(commits), refs};

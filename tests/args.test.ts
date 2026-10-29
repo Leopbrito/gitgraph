@@ -8,6 +8,7 @@ describe('parseCliArgs', () => {
       color: true,
       ascii: false,
       compact: false,
+      order: 'date',
       help: false,
       version: false,
     });
@@ -45,5 +46,16 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--foo'])).toThrow('opção desconhecida: --foo');
     expect(() => parseCliArgs(['-n'])).toThrow(/exige um valor/);
     expect(() => parseCliArgs(['main'])).toThrow('argumento inesperado: main');
+  });
+
+  it('reads --order and defaults to date', () => {
+    expect(parseCliArgs([]).order).toBe('date');
+    expect(parseCliArgs(['--order', 'topo']).order).toBe('topo');
+    expect(parseCliArgs(['--order=author-date']).order).toBe('author-date');
+    expect(parseCliArgs(['--order', 'date']).order).toBe('date');
+  });
+
+  it.each(['topological', '', 'DATE'])('rejects --order %j', value => {
+    expect(() => parseCliArgs([`--order=${value}`])).toThrow(/--order deve ser date, author-date, topo/);
   });
 });

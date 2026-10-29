@@ -41,6 +41,7 @@ gitgraph [opções]
 | `--no-color` | Desliga as cores (também vale a variável `NO_COLOR`). |
 | `--ascii` | Usa só caracteres ASCII no grafo e nos símbolos da interface. |
 | `--compact` | Uma linha por commit, sem a linha de ligação (`│`) entre eles. Por padrão, commits seguidos são ligados por um traço, o que ocupa mais linhas. |
+| `--order <ordem>` | Ordem dos commits: `date` (padrão, por data do commit), `author-date` (por data do autor) ou `topo` (mantém cada linha de história junta). A ordem por data intercala as branches e deixa o grafo bem mais estreito; `topo` pode ser melhor em históricos com poucas branches longas e simultâneas. |
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
 

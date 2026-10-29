@@ -32,7 +32,7 @@ src/
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
-    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount; `all` exclui o stash; repo vazio devolve [])
+    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount/order; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     checkout.ts    # checkoutTargets()/isCurrent()/describeTarget()/describeOption() (puros) e checkout() via `git switch` (+ `pull --ff-only`)
@@ -85,11 +85,15 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 - `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `c` faz checkout; `q` sai.
 - `/` abre o seletor de branch (locais e remotas) com seleção múltipla: digitar filtra a lista, `↑`/`↓` movem, `Espaço` marca/desmarca (em "todas", limpa as marcas), `Enter` aplica, `Esc` cancela. O filtro é uma lista `revs: string[]` (vazia = todas, via `--exclude=refs/stash --all`); aplicar recarrega com `git log <revs...>`, ou seja, a união dos commits alcançáveis de cada branch. As marcas são do estado do seletor (`selected`), sobrevivem à digitação, e o seletor abre já com o filtro atual marcado. `chosenRevs` (puro, em `picker.ts`) decide o que o `Enter` aplica: as marcadas na ordem da lista ou, sem nenhuma, a destacada.
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.
-- Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo do `--topo-order` não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
+- Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo da ordem escolhida (veja "Ordem dos commits") não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
 - `Browser` recebe `load(revs, limit)` por parâmetro, o que isola o git da UI e permite testar com dados falsos. As refs são relidas a cada `load` (são baratas), porque um checkout move o HEAD.
 - **Checkout (`c`):** `checkoutTargets` escolhe o destino do commit selecionado: as branches locais cuja ponta ele é (ordenadas) ou, se não houver, HEAD destacado (`git switch --detach <hash>`); pontas só remotas caem em HEAD destacado. Sempre pede confirmação (`CheckoutPrompt`; com várias branches é uma lista). Se o HEAD já está no destino, só avisa no rodapé. Nunca usa `--force`: o git recusa quando alterações locais seriam sobrescritas, e a mensagem vira o erro de uma linha no rodapé.
 - **Branch local atrás da remota:** se o commit é a ponta de `origin/x` e a branch local `x` (`localBranchTips` em `refs.ts`) está em outro commit, `checkoutTargets` devolve `[pull x, branches realmente no commit, x sem pull, HEAD destacado]` e o prompt é uma lista com a primeira opção selecionada. O nome da branch local é o que sobra depois da remota, tentando cada `/` (aguenta `origin/feature/x`). `checkout` de um alvo `pull` faz `git switch x` e depois `git pull --ff-only <remota> x`. Se o pull falha, lança `PartialCheckoutError` (a troca já aconteceu): o `Browser` recarrega para o HEAD refletir isso e mantém a mensagem, filtrada por `summarizeGitError` (tira o resumo do fetch e as `hint:`). O pull usa `git(..., {network: true})`: `GIT_TERMINAL_PROMPT=0`, processo sem terminal de controle (`detached`, para o ssh não pedir senha na TUI) e limite de 2 minutos.
 - Depois do sucesso do checkout, `Browser` chama `reload` (cursor mantido) para o marcador HEAD acompanhar. `Browser` recebe `checkout(target)` por parâmetro, como `load`.
+
+### Ordem dos commits
+
+`loadCommits` aceita `order` (`COMMIT_ORDERS` em `log.ts`): `date` (padrão, `git log --date-order`), `author-date` e `topo` (`--topo-order`). Todas garantem que nenhum pai aparece antes dos filhos, de que o layout depende. A escolha muda muito a largura do grafo, porque decide quanto tempo cada lane fica aberta: com `--topo-order` cada linha de história sai inteira antes da seguinte, então um merge abre uma lane que espera por um commit distante; com `--date-order` os commits da branch ficam perto do merge que os incorporou e as lanes são curtas. Num histórico real com ~90 commits e PRs de uma mesma branch de feature, a largura foi de 14 colunas (`topo`) para 2 (`date`), que é também o que o Git Graph do VS Code faz por padrão. `--max-count` não muda o prefixo da lista nas três ordens (git ordena tudo antes de cortar), o que a carga sob demanda exige; há teste para isso.
 
 ### Opções e erros
 

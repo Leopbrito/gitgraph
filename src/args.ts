@@ -1,4 +1,5 @@
 import {parseArgs} from 'node:util';
+import {COMMIT_ORDERS, type CommitOrder} from './git/log.js';
 
 export interface CliOptions {
   /** Limite de commits; sem ele a TUI carrega sob demanda e o pipe imprime tudo. */
@@ -7,6 +8,8 @@ export interface CliOptions {
   ascii: boolean;
   /** One line per commit, without the connector line between them. */
   compact: boolean;
+  /** How commits are ordered (see `CommitOrder`). */
+  order: CommitOrder;
   help: boolean;
   version: boolean;
 }
@@ -23,6 +26,7 @@ Opções:
       --no-color       desliga as cores (também vale a variável NO_COLOR)
       --ascii          usa só caracteres ASCII no grafo
       --compact        uma linha por commit, sem a linha de ligação entre eles
+      --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
   -h, --help           mostra esta ajuda
   -v, --version        mostra a versão
 
@@ -41,6 +45,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         'no-color': {type: 'boolean'},
         ascii: {type: 'boolean'},
         compact: {type: 'boolean'},
+        order: {type: 'string'},
         help: {type: 'boolean', short: 'h'},
         version: {type: 'boolean', short: 'v'},
       },
@@ -53,15 +58,25 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
   if (raw !== undefined && !/^[1-9]\d*$/.test(raw)) {
     throw new UsageError(`--max-count deve ser um inteiro positivo (recebido: "${raw}")`);
   }
+  const order = values.order ?? 'date';
+  if (!isCommitOrder(order)) {
+    throw new UsageError(
+      `--order deve ser ${COMMIT_ORDERS.join(', ')} (recebido: "${order}")`,
+    );
+  }
   return {
     maxCount: raw === undefined ? undefined : Number(raw),
     color: !values['no-color'] && !env['NO_COLOR'],
     ascii: values.ascii ?? false,
     compact: values.compact ?? false,
+    order,
     help: values.help ?? false,
     version: values.version ?? false,
   };
 }
+
+const isCommitOrder = (value: string): value is CommitOrder =>
+  (COMMIT_ORDERS as readonly string[]).includes(value);
 
 function translate(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
