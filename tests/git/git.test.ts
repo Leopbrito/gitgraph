@@ -70,4 +70,17 @@ describe('repositório com branch e merge', () => {
     expect(await loadCommits(dir, {all: true})).toHaveLength(2);
     expect(await loadCommits(dir, {all: true, maxCount: 1})).toHaveLength(1);
   });
+
+  it('filtra por revisão (branch)', async () => {
+    const {dir, run} = repo();
+    run('commit', '--allow-empty', '-q', '-m', 'base');
+    run('checkout', '-q', '-b', 'feature');
+    run('commit', '--allow-empty', '-q', '-m', 'só na feature');
+    run('checkout', '-q', 'main');
+    run('commit', '--allow-empty', '-q', '-m', 'só na main');
+    const main = await loadCommits(dir, {revs: ['main']});
+    expect(main.map(c => c.subject)).toEqual(['só na main', 'base']);
+    const feature = await loadCommits(dir, {revs: ['feature']});
+    expect(feature.map(c => c.subject)).toEqual(['só na feature', 'base']);
+  });
 });

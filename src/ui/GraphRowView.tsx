@@ -5,7 +5,7 @@ import type {GraphRow, Ref} from '../graph/types.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
 const PALETTE = ['cyan', 'magenta', 'yellow', 'green', 'blue', 'red'] as const;
-const laneColor = (column: number) => PALETTE[column % PALETTE.length];
+export const laneColor = (column: number) => PALETTE[column % PALETTE.length];
 
 interface Props {
   row: GraphRow;
@@ -13,11 +13,13 @@ interface Props {
   graphWidth: number;
   refs: Ref[];
   head: HeadInfo;
+  /** Destaca a linha (cursor da navegação). */
+  selected?: boolean;
 }
 
 // Cada linha é um único <Text> truncado na largura do terminal: o grafo não
 // desalinha e commits longos não quebram em várias linhas.
-export function GraphRowView({row, graphWidth, refs, head}: Props) {
+export function GraphRowView({row, graphWidth, refs, head, selected = false}: Props) {
   const {node, connector} = renderGraphLines(row, row.width);
   const {commit} = row;
   return (
@@ -25,14 +27,16 @@ export function GraphRowView({row, graphWidth, refs, head}: Props) {
       <Text wrap="truncate-end">
         <GraphCells cells={node} graphWidth={graphWidth} />
         <Text> </Text>
-        <Text dimColor>{commit.hash.slice(0, 7)} </Text>
-        {formatRefs(refs, head).map(label => (
-          <Text key={label.text} color={label.color} bold>
-            {`(${label.text}) `}
-          </Text>
-        ))}
-        <Text>{commit.subject}</Text>
-        <Text dimColor>{`  ${commit.author}, ${commit.date.slice(0, 10)}`}</Text>
+        <Text inverse={selected}>
+          <Text dimColor>{commit.hash.slice(0, 7)} </Text>
+          {formatRefs(refs, head).map(label => (
+            <Text key={label.text} color={label.color} bold>
+              {`(${label.text}) `}
+            </Text>
+          ))}
+          <Text>{commit.subject}</Text>
+          <Text dimColor>{`  ${commit.author}, ${commit.date.slice(0, 10)}`}</Text>
+        </Text>
       </Text>
       {connector && (
         <Text wrap="truncate-end">

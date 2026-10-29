@@ -16,6 +16,11 @@ export interface GraphLines {
 /** Cada coluna ocupa duas células: o glifo e o espaço (ou `─`) até a próxima. */
 export const CELLS_PER_COLUMN = 2;
 
+/** A linha precisa de uma linha de ligação quando alguma aresta muda de coluna. */
+export function needsConnector(row: GraphRow): boolean {
+  return row.edges.some(e => e.column !== row.column);
+}
+
 export function renderGraphLines(row: GraphRow, width: number): GraphLines {
   return {node: renderNode(row, width), connector: renderConnector(row, width)};
 }

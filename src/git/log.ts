@@ -9,16 +9,21 @@ const LOG_FORMAT = '%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e';
 export interface LogOptions {
   /** Inclui todas as refs (branches, tags, remotos), não só HEAD. */
   all?: boolean;
+  /** Revisões de partida (ex.: uma branch); ignorado com `all`. Sem nenhuma, usa HEAD. */
+  revs?: string[];
   maxCount?: number;
 }
 
 export async function loadCommits(
   cwd: string,
-  {all = false, maxCount}: LogOptions = {},
+  {all = false, revs = [], maxCount}: LogOptions = {},
 ): Promise<Commit[]> {
   const args = ['log', '--topo-order', `--format=${LOG_FORMAT}`];
   if (all) args.push('--all');
+  else args.push(...revs);
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
+  // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.
+  args.push('--');
   try {
     return parseLog(await git(args, cwd));
   } catch (error) {
