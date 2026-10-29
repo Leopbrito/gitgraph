@@ -23,7 +23,8 @@ describe('formatPlain', () => {
       '●    1111111 (HEAD -> main) merge  Ana, 2026-03-04',
       '├─╮',
       '● │  2222222 main  Ana, 2026-03-04',
-      '  ●  3333333 (feature) feature  Ana, 2026-03-04',
+      ' ╱',
+      '●    3333333 (feature) feature  Ana, 2026-03-04',
     ]);
   });
 });

@@ -7,7 +7,7 @@ import {parseLog} from './parse.js';
 const LOG_FORMAT = '%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e';
 
 export interface LogOptions {
-  /** Inclui todas as refs (branches, tags, remotos), não só HEAD. */
+  /** Inclui todas as refs (branches, tags, remotos), menos o stash, não só HEAD. */
   all?: boolean;
   /** Revisões de partida (ex.: uma branch); ignorado com `all`. Sem nenhuma, usa HEAD. */
   revs?: string[];
@@ -19,7 +19,8 @@ export async function loadCommits(
   {all = false, revs = [], maxCount}: LogOptions = {},
 ): Promise<Commit[]> {
   const args = ['log', '--topo-order', `--format=${LOG_FORMAT}`];
-  if (all) args.push('--all');
+  // O stash guarda commits internos (index, untracked) que poluiriam o grafo.
+  if (all) args.push('--exclude=refs/stash', '--all');
   else args.push(...revs);
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
   // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.

@@ -52,7 +52,7 @@ function GraphCells({cells, graphWidth}: {cells: Cell[]; graphWidth: number}) {
   return (
     <>
       {cells.map((cell, i) => (
-        <Text key={i} color={laneColor(cell.column)}>
+        <Text key={i} color={laneColor(cell.color)}>
           {cell.char}
         </Text>
       ))}

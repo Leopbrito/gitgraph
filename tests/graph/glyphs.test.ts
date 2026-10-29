@@ -33,13 +33,43 @@ describe('renderGraphLines', () => {
     ]);
   });
 
-  it('desenha octopus merge com três pais', () => {
+  it('desenha octopus merge e o deslizamento das lanes restantes', () => {
+    // Cada raiz que termina faz as lanes da direita deslizarem uma coluna (╱).
     expect(draw([c('O', 'p1', 'p2', 'p3'), c('p1'), c('p2'), c('p3')])).toEqual([
       '●',
       '├─┬─╮',
       '● │ │',
-      '  ● │',
-      '    ●',
+      ' ╱ ╱',
+      '● │',
+      ' ╱',
+      '●',
+    ]);
+  });
+
+  it('empurra lanes à direita com ╲ e as traz de volta com ╱', () => {
+    const commits = [
+      c('T0', 'a'),
+      c('T1', 'M'),
+      c('T2', 'c'),
+      c('M', 'm0', 'f0'),
+      c('m0'),
+      c('f0'),
+      c('a'),
+      c('c'),
+    ];
+    expect(draw(commits)).toEqual([
+      '●',
+      '│ ●',
+      '│ │ ●',
+      '│ ● │',
+      '│ ├─╮╲',
+      '│ ● │ │',
+      '│  ╱ ╱',
+      '│ ● │',
+      '│  ╱',
+      '● │',
+      ' ╱',
+      '●',
     ]);
   });
 

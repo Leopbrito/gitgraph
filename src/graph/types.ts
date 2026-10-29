@@ -19,18 +19,25 @@ export interface Ref {
 /** Aresta de um commit para um de seus pais. */
 export interface Edge {
   parent: string;
-  /** Coluna da lane do pai logo após esta linha. */
+  /** Coluna da lane do pai logo após esta linha (índice em `lanesAfter`). */
   column: number;
 }
 
 export interface GraphRow {
   commit: Commit;
-  /** Coluna onde o commit é desenhado. */
+  /** Coluna do commit em `lanesBefore`. */
   column: number;
-  /** Hash esperado por cada lane ao chegar nesta linha (null = livre). */
-  lanesBefore: (string | null)[];
+  /**
+   * Lanes ao chegar nesta linha, sem buracos: cada posição é um hash esperado
+   * e o índice é a coluna na tela. Uma ponta nova entra no fim da lista.
+   */
+  lanesBefore: string[];
   /** Idem, depois de processar o commit. */
-  lanesAfter: (string | null)[];
+  lanesAfter: string[];
+  /** Cor de cada lane (paralelo a `lanesBefore`); a lane mantém a cor ao se deslocar. */
+  colorsBefore: number[];
+  /** Cor de cada lane (paralelo a `lanesAfter`). */
+  colorsAfter: number[];
   /** Uma aresta por pai, na ordem de `commit.parents`. */
   edges: Edge[];
   /** Número de colunas necessárias para desenhar esta linha. */

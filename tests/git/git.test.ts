@@ -1,3 +1,5 @@
+import {writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {loadCommits} from '../../src/git/log.js';
 import {loadRefs} from '../../src/git/refs.js';
@@ -82,5 +84,18 @@ describe('repositório com branch e merge', () => {
     expect(main.map(c => c.subject)).toEqual(['só na main', 'base']);
     const feature = await loadCommits(dir, {revs: ['feature']});
     expect(feature.map(c => c.subject)).toEqual(['só na feature', 'base']);
+  });
+
+  it('não inclui os commits internos do stash com --all', async () => {
+    const {dir, run} = repo();
+    writeFileSync(join(dir, 'a.txt'), 'um');
+    run('add', 'a.txt');
+    run('commit', '-q', '-m', 'com arquivo');
+    writeFileSync(join(dir, 'a.txt'), 'dois');
+    run('stash', 'push', '-q', '-m', 'trabalho em andamento');
+    // O stash existe e traz commits extras para o git log --all comum.
+    expect(run('rev-list', '--all', '--count')).not.toBe('1');
+    const commits = await loadCommits(dir, {all: true});
+    expect(commits.map(c => c.subject)).toEqual(['com arquivo']);
   });
 });

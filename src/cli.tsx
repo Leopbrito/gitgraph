@@ -23,6 +23,11 @@ async function main() {
 
   // Sem TTY (pipe/redirecionamento) a saída é texto puro, como o `git log`.
   if (!process.stdout.isTTY) {
+    // O leitor pode fechar o pipe antes do fim (`| head`, `| less` + q): sai sem erro.
+    process.stdout.on('error', error => {
+      if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0);
+      throw error;
+    });
     for (const line of formatPlain(initial.rows, refs)) console.log(line);
     return;
   }

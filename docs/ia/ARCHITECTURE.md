@@ -31,7 +31,7 @@ src/
   cli.tsx          # entrada: carrega dados e escolhe Browser (TTY) ou texto puro (pipe)
   git/
     exec.ts        # executa `git` (execFile) e rejeita com o stderr
-    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount; repo vazio devolve [])
+    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
   graph/
@@ -56,18 +56,23 @@ tests/
 
 ### Modelo de layout
 
-`layoutGraph` recebe commits em ordem topológica (filhos antes dos pais) e mantém uma lista de *lanes*, em que cada coluna guarda o hash do commit esperado. Regras:
+`layoutGraph` recebe commits em ordem topológica (filhos antes dos pais) e mantém uma lista **densa** de *lanes* (hashes esperados, sem buracos): o índice da lane é a coluna na tela. Regras:
 
-- O commit fica na lane que o espera; sem lane (ponta nova), usa a primeira livre.
-- O primeiro pai herda a coluna do filho; os demais pais abrem lanes livres.
+- O commit fica na lane que o espera; sem lane (ponta nova), entra no **fim** da lista, para não empurrar as lanes existentes sem uma linha de ligação.
+- O primeiro pai herda a lane (e a cor) do filho; os demais abrem lanes logo à direita dele.
 - Pai que já tem lane recebe a aresta nela, sem duplicar lane.
-- Cada `GraphRow` expõe `lanesBefore`, `lanesAfter` e `edges`, o suficiente para desenhar linhas passantes, bifurcações e merges. Lanes livres à esquerda não são compactadas.
+- Quando uma lane termina (raiz, ou primeiro pai já presente em outra lane), as da direita deslizam para a esquerda. Por isso o grafo não deixa colunas vazias.
+- Cada `GraphRow` expõe `lanesBefore`/`lanesAfter` (e as cores paralelas) e `edges` (coluna do pai em `lanesAfter`). A lane mantém a cor ao deslizar: a cor é da lane, não da coluna.
+
+### Desenho (glyphs)
+
+A linha do commit mostra `●` e as lanes passantes (`│`) de `lanesBefore`. A **linha de ligação** existe só se alguma lane muda de coluna (`needsConnector`) e desenha, para cada trajeto (aresta do commit ou lane passante), sobe-anda-desce entre a coluna de origem e a de destino. As direções que se encontram numa célula se somam e viram o glifo (`├ ┤ ┬ ┴ ┼ ╭ ╮ ╰ ╯`). Lanes que só deslizam uma coluna usam `╱` (esquerda) ou `╲` (direita) no espaço entre as colunas, se ele estiver livre.
 
 ### Saída
 
 - **TTY:** `Browser` roda em tela alternativa (`alternateScreen` do Ink), então o scrollback do terminal não é afetado. O layout tem altura fixa: cabeçalho, lista, separador, detalhes (5 linhas) e rodapé, mais 1 linha de folga (se a saída ocupar todas as linhas, o Ink limpa a tela a cada render). Cada linha é truncada na largura do terminal.
 - **Sem TTY (pipe/redirecionamento):** `formatPlain` imprime texto puro, sem cor nem quebra, como o `git log`. Não passa pelo Ink.
-- Cada coluna do grafo ocupa 2 caracteres (glifo + espaço ou `─`); a linha de ligação só existe quando alguma aresta muda de coluna.
+- Cada coluna do grafo ocupa 2 caracteres (glifo + espaço, `─`, `╱` ou `╲`).
 
 ### Interação (TTY)
 
