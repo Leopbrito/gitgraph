@@ -7,14 +7,25 @@ import {
   PartialCheckoutError,
   type CheckoutTarget,
 } from '../git/checkout.js';
+import {
+  describeMergeTarget,
+  MergeConflictError,
+  mergeTargets,
+  type MergeActions,
+  type MergeResult,
+  type MergeTarget,
+} from '../git/merge.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
 import {CheckoutPrompt} from './CheckoutPrompt.js';
+import {ConflictPrompt} from './ConflictPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {separator, tint, useDisplay} from './display.js';
+import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
+import {MergePrompt} from './MergePrompt.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
 import {clamp, scrollIntoView, visibleEnd} from './viewport.js';
 
@@ -34,6 +45,8 @@ interface Props {
   load: LoadGraph;
   /** Switches the repository to the target; rejects with git's message on failure. */
   checkout: (target: CheckoutTarget) => Promise<void>;
+  /** Git operations around a merge, injected like `load`. */
+  merge: MergeActions;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -46,7 +59,7 @@ const LOAD_AHEAD = 20;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, maxCommits, load, checkout}: Props) {
+export function Browser({initial, initialLimit, maxCommits, load, checkout, merge}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -60,6 +73,9 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<{targets: CheckoutTarget[]; index: number} | null>(null);
+  const [mergePrompt, setMergePrompt] = useState<{targets: MergeTarget[]; index: number} | null>(null);
+  // A merge in progress: 0 = abort it, 1 = leave it for the terminal.
+  const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const request = useRef(0);
 
   const branches = useMemo(() => branchNames(data.refs), [data.refs]);
@@ -145,7 +161,91 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
       });
   };
 
+  const failure = (e: unknown) => oneLine(e instanceof Error ? e.message : String(e));
+
+  const mergeNotice = (result: MergeResult, target: MergeTarget, branch: string) => {
+    const from = describeMergeTarget(target);
+    if (result === 'up-to-date') return `${from} já está incluído em ${branch}`;
+    return result === 'fast-forward'
+      ? `fast-forward: ${branch} avançou até ${from}`
+      : `merge de ${from} em ${branch} concluído`;
+  };
+
+  const runMerge = (target: MergeTarget) => {
+    const branch = data.refs.head.branch ?? '';
+    setMergePrompt(null);
+    setLoading(true);
+    setError(null);
+    merge
+      .merge(target)
+      .then(result => {
+        setNotice(mergeNotice(result, target, branch));
+        // The result is the newest commit, at the top: select it.
+        reload(revs, limit, result !== 'up-to-date');
+      })
+      .catch(e => {
+        if (e instanceof MergeConflictError) {
+          // The merge is in progress now: refresh so the header says so, then ask.
+          reload(revs, limit, false);
+          setConflict({files: e.files, index: 0});
+        } else {
+          setLoading(false);
+          setError(failure(e));
+        }
+      });
+  };
+
+  const abortMerge = () => {
+    setConflict(null);
+    setLoading(true);
+    merge
+      .abort()
+      .then(() => {
+        setNotice('merge abortado');
+        reload(revs, limit, false);
+      })
+      .catch(e => {
+        setLoading(false);
+        setError(failure(e));
+      });
+  };
+
+  const leaveMerge = () => {
+    setConflict(null);
+    setNotice('merge deixado em andamento: resolva no terminal ou aperte m para abortar');
+  };
+
+  // A merge is already in progress (started here or elsewhere): same dialog.
+  const manageMerge = () => {
+    merge.conflicts().then(files => setConflict({files, index: 0})).catch(e => setError(failure(e)));
+  };
+
   useInput((input, key) => {
+    if (mergePrompt) {
+      const single = mergePrompt.targets.length === 1;
+      const last = mergePrompt.targets.length - 1;
+      if (key.escape || (single && input === 'n')) {
+        setMergePrompt(null);
+      } else if (key.return || (single && input === 'y')) {
+        const target = mergePrompt.targets[mergePrompt.index];
+        if (target) runMerge(target);
+      } else if (key.upArrow) {
+        setMergePrompt({...mergePrompt, index: clamp(mergePrompt.index - 1, 0, last)});
+      } else if (key.downArrow) {
+        setMergePrompt({...mergePrompt, index: clamp(mergePrompt.index + 1, 0, last)});
+      }
+      return;
+    }
+
+    if (conflict) {
+      if (input === 'a') abortMerge();
+      else if (input === 'd' || key.escape) leaveMerge();
+      else if (key.return) (conflict.index === 0 ? abortMerge : leaveMerge)();
+      else if (key.upArrow) setConflict({...conflict, index: 0});
+      else if (key.downArrow) setConflict({...conflict, index: 1});
+      return;
+    }
+
     if (prompt) {
       const single = prompt.targets.length === 1;
       const last = prompt.targets.length - 1;
@@ -204,6 +304,18 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
+    else if (input === 'm' && !loading) {
+      const head = data.refs.head;
+      if (head.merging) manageMerge();
+      else if (!commit) return;
+      else if (commit.stash) setNotice('um stash não pode ser mesclado');
+      else if (head.branch === null) setNotice('HEAD destacado: troque para uma branch antes do merge');
+      else if (commit.hash === head.hash) setNotice('esse já é o commit da branch atual');
+      else {
+        setError(null);
+        setMergePrompt({targets: mergeTargets(commit.hash, refsOf(commit.hash), head.branch), index: 0});
+      }
+    }
     else if (input === 'c' && commit?.stash) setNotice('um stash não pode ser usado em checkout');
     else if (input === 'c' && commit && !loading) {
       const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
@@ -232,11 +344,29 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
         ? revs.join(', ')
         : `${revs.slice(0, 2).join(', ')} +${revs.length - 2}`;
   const more = canGrow && total >= limit;
+  const confirmHint = (count: number) =>
+    count === 1
+      ? `Enter/y confirma ${dot} Esc/n cancela`
+      : `${arrows} escolher ${dot} Enter confirma ${dot} Esc cancela`;
+  const footerHint = prompt
+    ? confirmHint(prompt.targets.length)
+    : mergePrompt
+      ? confirmHint(mergePrompt.targets.length)
+      : conflict
+        ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
+        : picker
+          ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
+          : (notice ??
+            `j/k ${arrows} mover ${dot} g/G início/fim ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
 
   return (
     <Box flexDirection="column" height={terminalRows - 1}>
       <Text wrap="truncate-end">
         <Text bold>gitgraph</Text>
+        <Text dimColor>{` ${dot} atual: `}</Text>
+        <Text bold color={tint(display, data.refs.head.merging ? 'yellow' : 'cyan')}>
+          {headLabel(data.refs.head)}
+        </Text>
         <Text dimColor>
           {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
         </Text>
@@ -256,6 +386,14 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
       <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>
       {prompt ? (
         <CheckoutPrompt targets={prompt.targets} index={prompt.index} head={data.refs.head} />
+      ) : mergePrompt ? (
+        <MergePrompt
+          targets={mergePrompt.targets}
+          index={mergePrompt.index}
+          branch={data.refs.head.branch ?? ''}
+        />
+      ) : conflict ? (
+        <ConflictPrompt files={conflict.files} index={conflict.index} />
       ) : picker ? (
         <BranchPicker
           query={picker.query}
@@ -271,16 +409,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
         />
       )}
       <Text wrap="truncate-end" color={error ? tint(display, 'red') : undefined} dimColor={!error}>
-        {error
-          ? `erro: ${error}`
-          : prompt
-            ? prompt.targets.length === 1
-              ? `Enter/y confirma ${dot} Esc/n cancela`
-              : `${arrows} escolher ${dot} Enter confirma ${dot} Esc cancela`
-            : picker
-              ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
-              : (notice ??
-                `j/k ${arrows} mover ${dot} PgUp/PgDn ${dot} g/G início/fim ${dot} c checkout ${dot} / branch ${dot} q sair`)}
+        {error ? `erro: ${error}` : footerHint}
       </Text>
     </Box>
   );

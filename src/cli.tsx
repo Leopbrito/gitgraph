@@ -4,6 +4,7 @@ import React from 'react';
 import {render} from 'ink';
 import {HELP, parseCliArgs, UsageError} from './args.js';
 import {checkout} from './git/checkout.js';
+import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {layoutGraph} from './graph/layout.js';
@@ -68,6 +69,11 @@ async function main() {
         maxCommits={options.maxCount}
         load={load}
         checkout={target => checkout(cwd, target)}
+        merge={{
+          merge: target => mergeInto(cwd, target),
+          abort: () => abortMerge(cwd),
+          conflicts: () => conflictedFiles(cwd),
+        }}
       />
     </DisplayContext.Provider>,
     {alternateScreen: true},

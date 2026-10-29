@@ -36,3 +36,9 @@ export function formatRefs(refs: Ref[], head: HeadInfo): Label[] {
   }
   return labels;
 }
+
+/** Where HEAD is, for the header: the branch, or the commit when detached. */
+export function headLabel(head: {hash: string | null; branch: string | null; merging?: boolean}): string {
+  const where = head.branch ?? (head.hash ? `HEAD destacado em ${head.hash.slice(0, 7)}` : 'sem commits');
+  return head.merging ? `${where} (merge em andamento)` : where;
+}

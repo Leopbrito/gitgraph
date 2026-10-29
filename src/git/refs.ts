@@ -1,12 +1,16 @@
 import type {Ref, RefKind} from '../graph/types.js';
 import {git} from './exec.js';
+import {mergeInProgress} from './merge.js';
 import {loadStashes} from './stash.js';
 
 export interface RefInfo {
   /** Refs agrupadas pelo hash do commit apontado. */
   byCommit: Map<string, Ref[]>;
-  /** Commit de HEAD (null em repositório sem commits) e branch atual (null se destacado). */
-  head: {hash: string | null; branch: string | null};
+  /**
+   * HEAD's commit (null in a repository without commits), the current branch
+   * (null when detached) and whether a merge is in progress.
+   */
+  head: {hash: string | null; branch: string | null; merging?: boolean};
 }
 
 const FORMAT = '%(objectname)%00%(*objectname)%00%(refname)';
@@ -61,7 +65,7 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
     list.push({name, kind: 'stash'});
     byCommit.set(stashHash, list);
   }
-  return {byCommit, head: {hash, branch}};
+  return {byCommit, head: {hash, branch, merging: await mergeInProgress(cwd)}};
 }
 
 /** Tip commit of each local branch, from the refs grouped by commit. */

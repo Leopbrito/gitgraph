@@ -36,6 +36,7 @@ src/
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
+    merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
     checkout.ts    # checkoutTargets()/isCurrent()/describeTarget()/describeOption() (puros) e checkout() via `git switch` (+ `pull --ff-only`)
   graph/
     types.ts       # Commit, Ref, Edge, GraphRow
@@ -48,6 +49,8 @@ src/
     CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas)
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
     CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
+    MergePrompt.tsx # confirmação do merge (idem)
+    ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2 (puro)
     picker.ts      # lista e filtro de branches (puro)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
@@ -83,7 +86,7 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 
 ### Interação (TTY)
 
-- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `c` faz checkout; `q` sai.
+- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `c` faz checkout; `m` faz merge na branch atual; `q` sai.
 - `/` abre o seletor de branch (locais e remotas) com seleção múltipla: digitar filtra a lista, `↑`/`↓` movem, `Espaço` marca/desmarca (em "todas", limpa as marcas), `Enter` aplica, `Esc` cancela. O filtro é uma lista `revs: string[]` (vazia = todas, via `--exclude=refs/stash --all`); aplicar recarrega com `git log <revs...>`, ou seja, a união dos commits alcançáveis de cada branch. As marcas são do estado do seletor (`selected`), sobrevivem à digitação, e o seletor abre já com o filtro atual marcado. `chosenRevs` (puro, em `picker.ts`) decide o que o `Enter` aplica: as marcadas na ordem da lista ou, sem nenhuma, a destacada.
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.
 - Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo da ordem escolhida (veja "Ordem dos commits") não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
@@ -95,6 +98,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 ### Ordem dos commits
 
 `loadCommits` aceita `order` (`COMMIT_ORDERS` em `log.ts`): `date` (padrão, `git log --date-order`), `author-date` e `topo` (`--topo-order`). Todas garantem que nenhum pai aparece antes dos filhos, de que o layout depende. A escolha muda muito a largura do grafo, porque decide quanto tempo cada lane fica aberta: com `--topo-order` cada linha de história sai inteira antes da seguinte, então um merge abre uma lane que espera por um commit distante; com `--date-order` os commits da branch ficam perto do merge que os incorporou e as lanes são curtas. Num histórico real com ~90 commits e PRs de uma mesma branch de feature, a largura foi de 14 colunas (`topo`) para 2 (`date`), que é também o que o Git Graph do VS Code faz por padrão. `--max-count` não muda o prefixo da lista nas três ordens (git ordena tudo antes de cortar), o que a carga sob demanda exige; há teste para isso.
+
+### Merge e branch atual
+
+O cabeçalho mostra `atual: <branch>` (`headLabel`, em `format.ts`), vindo de `RefInfo.head`, que `loadRefs` relê a cada carga; `head.merging` vem de `mergeInProgress` (existência de `.git/MERGE_HEAD`). `m` calcula as origens com `mergeTargets`: as branches locais e remotas cuja ponta é o commit (a atual fica de fora), ou o próprio commit. Recusas sem prompt: stash, HEAD destacado, e o commit de HEAD. A confirmação (`MergePrompt`) roda `merge()`: `git merge --no-edit <ref>` (fast-forward quando possível, senão merge commit; o resultado `up-to-date | fast-forward | merged` vira o aviso do rodapé). Depois do sucesso o `Browser` recarrega e **seleciona a primeira linha** (o commit novo), porque o índice do cursor mudaria. Recusas do git (alterações locais, ref inexistente) são um erro de uma linha e não mudam nada.
+
+**Conflitos.** Se o `git merge` falha e `MERGE_HEAD` existe, `merge()` lança `MergeConflictError` com os arquivos (`git diff --name-only --diff-filter=U`) e deixa o merge em andamento. O `Browser` recarrega (para o cabeçalho avisar) e abre `ConflictPrompt`: `a` aborta (`git merge --abort`), `d`/`Esc` deixa em andamento. Como o estado vive no repositório e não na TUI, `m` com `head.merging` reabre o mesmo diálogo, mesmo que o merge tenha começado antes de abrir a TUI. O `Browser` recebe `merge: MergeActions` por parâmetro, como `load` e `checkout`.
 
 ### Stashes
 

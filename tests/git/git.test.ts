@@ -19,7 +19,7 @@ describe('repositório vazio', () => {
     const {dir} = repo();
     expect(await loadCommits(dir)).toEqual([]);
     const refs = await loadRefs(dir);
-    expect(refs.head).toEqual({hash: null, branch: 'main'});
+    expect(refs.head).toEqual({hash: null, branch: 'main', merging: false});
     expect(refs.byCommit.size).toBe(0);
   });
 });
@@ -50,7 +50,7 @@ describe('repositório com branch e merge', () => {
 
     const refs = await loadRefs(dir);
     const tip = commits[0]!.hash;
-    expect(refs.head).toEqual({hash: tip, branch: 'main'});
+    expect(refs.head).toEqual({hash: tip, branch: 'main', merging: false});
     expect(refs.byCommit.get(tip)).toEqual(
       expect.arrayContaining([
         {name: 'main', kind: 'branch'},

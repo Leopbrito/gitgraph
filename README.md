@@ -56,6 +56,7 @@ Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como
 | `PgDn`, `PgUp` | Anda uma página |
 | `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Num stash, só avisa que não dá para fazer checkout. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
 | `g` / `Home`, `G` / `End` | Vai ao início, ao fim |
+| `m` | Merge na branch atual, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela): da branch que aponta para o commit selecionado (uma lista, se forem várias, incluindo remotas) ou do próprio commit. Em conflito, você escolhe entre abortar e deixar em andamento. |
 | `/` | Filtra por uma ou mais branches: digite para buscar, `↑`/`↓` movem, `Espaço` marca/desmarca, `Enter` aplica, `Esc` cancela |
 | `q` | Sai |
 
@@ -64,6 +65,10 @@ O painel abaixo da lista mostra os detalhes do commit selecionado.
 No filtro (`/`), marque quantas branches quiser com `Espaço`: o grafo mostra os commits alcançáveis de qualquer uma delas (a união, como `git log a b`). `Enter` aplica as marcadas; sem nenhuma marcada, aplica a branch destacada. As marcas continuam valendo enquanto você digita para filtrar a lista, e reabrir o seletor mostra o filtro atual marcado. Para voltar a todas as branches, aperte `Espaço` em "(todas as branches)" e `Enter`.
 
 Quando a branch local está desatualizada em relação à remota, a lista do `c` traz três opções: `x e pull de origin/x` (já selecionada), `x (sem pull)` e HEAD destacado no commit. O pull é `git pull --ff-only <remota> <branch>`: só avança por fast-forward e nunca cria merge nem rebase. Se as branches divergiram, ou há alterações locais que seriam sobrescritas, o git recusa; como a troca de branch já aconteceu, a mensagem diz "checkout feito para x, mas o pull falhou: ...". O pull fala com a rede sem prompts de terminal: as credenciais precisam estar disponíveis sem interação (ssh-agent, credential helper) e há um limite de 2 minutos.
+
+O cabeçalho mostra a **branch atual** (`atual: main`; com o HEAD destacado, `atual: HEAD destacado em abc1234`) e avisa quando há um merge em andamento. Ele acompanha checkouts e merges.
+
+**Merge (`m`).** É o `git merge --no-edit` normal: faz fast-forward quando dá e, senão, um merge commit com a mensagem automática do git (a TUI não abre editor). A origem é a branch cuja ponta é o commit selecionado (locais e remotas, menos a atual); sem nenhuma, o próprio commit. Não faz merge num stash, com o HEAD destacado nem do commit em que a branch atual já está. Se o git recusar (por exemplo, alterações locais seriam sobrescritas), nada muda e a mensagem aparece no rodapé. Se houver **conflitos**, o merge fica em andamento, o cabeçalho passa a dizer isso e um diálogo lista os arquivos e oferece: `a` abortar (`git merge --abort`, que restaura tudo) ou `d`/`Esc` deixar em andamento para você resolver no terminal. Mesmo depois de deixar em andamento, `m` reabre o diálogo para abortar. Se um commit de merge precisar de assinatura GPG com senha, o pedido de senha pode atrapalhar a tela.
 
 O checkout nunca usa `--force`: se houver alterações locais que seriam sobrescritas (ou a branch estiver em uso em outro worktree), o git recusa, nada muda e a mensagem aparece no rodapé.
 

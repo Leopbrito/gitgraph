@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {formatRefs} from '../../src/ui/format.js';
+import {formatRefs, headLabel} from '../../src/ui/format.js';
 
 describe('formatRefs', () => {
   it('põe HEAD primeiro e não repete a branch atual', () => {
@@ -41,5 +41,29 @@ describe('formatRefs', () => {
       {text: 'tag: v1', color: 'yellow'},
       {text: 'stash@{0}', color: 'magenta'},
     ]);
+  });
+});
+
+describe('headLabel', () => {
+  it('names the branch', () => {
+    expect(headLabel({hash: 'abc', branch: 'main'})).toBe('main');
+  });
+
+  it('names the commit when HEAD is detached', () => {
+    expect(headLabel({hash: 'abcdef1234', branch: null})).toBe('HEAD destacado em abcdef1');
+  });
+
+  it('says when there are no commits', () => {
+    expect(headLabel({hash: null, branch: null})).toBe('sem commits');
+    // An unborn branch still has a name.
+    expect(headLabel({hash: null, branch: 'main'})).toBe('main');
+  });
+
+  it('flags a merge in progress', () => {
+    expect(headLabel({hash: 'abc', branch: 'main', merging: true})).toBe('main (merge em andamento)');
+    expect(headLabel({hash: 'abcdef1234', branch: null, merging: true})).toBe(
+      'HEAD destacado em abcdef1 (merge em andamento)',
+    );
+    expect(headLabel({hash: 'abc', branch: 'main', merging: false})).toBe('main');
   });
 });

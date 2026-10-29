@@ -5,16 +5,23 @@ import type {RefInfo} from '../../src/git/refs.js';
 import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
+import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
 import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
 import {DisplayContext} from '../../src/ui/display.js';
 
 const noCheckout = () => Promise.resolve();
+const noMerge: MergeActions = {
+  merge: () => Promise.resolve('merged'),
+  abort: () => Promise.resolve(),
+  conflicts: () => Promise.resolve([]),
+};
 
-/** The real Browser with a harmless default `checkout`, so older tests need not pass one. */
-function Browser(props: Omit<React.ComponentProps<typeof BrowserView>, 'checkout'> & {
+/** The real Browser with harmless default `checkout` and `merge`, so most tests need not pass them. */
+function Browser(props: Omit<React.ComponentProps<typeof BrowserView>, 'checkout' | 'merge'> & {
   checkout?: (target: CheckoutTarget) => Promise<void>;
+  merge?: MergeActions;
 }) {
-  return <BrowserView checkout={noCheckout} {...props} />;
+  return <BrowserView checkout={noCheckout} merge={noMerge} {...props} />;
 }
 
 const commit = (n: number, parents: string[]): Commit => ({
@@ -186,7 +193,7 @@ describe('Browser', () => {
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('Up/Down');
-    expect(frame).toContain('gitgraph | todas as branches | 1/5');
+    expect(frame).toContain('gitgraph | atual: main | todas as branches | 1/5');
     expect(frame).toContain('*');
     expect(frame).not.toMatch(/[●│─·↑↓]/);
   });
@@ -561,6 +568,246 @@ describe('Browser', () => {
       const {lastFrame, stdin} = render(<Browser initial={withStash()} initialLimit={100} load={vi.fn()} />);
       await press(stdin, 'j', 'c');
       expect(lastFrame()).toContain('Checkout para');
+    });
+  });
+
+  describe('current branch in the header', () => {
+    const withHead = (head: GraphData['refs']['head']): GraphData => ({
+      rows: data(3).rows,
+      refs: {...refs, head},
+    });
+    const header = (initial: GraphData) => {
+      const {lastFrame} = render(<Browser initial={initial} initialLimit={100} load={vi.fn()} />);
+      return (lastFrame() ?? '').split('\n')[0] ?? '';
+    };
+
+    it('shows the current branch', () => {
+      expect(header(data(3))).toContain('atual: main');
+    });
+
+    it('shows the commit when HEAD is detached', () => {
+      expect(header(withHead({hash: 'h000001', branch: null}))).toContain('atual: HEAD destacado em h000001');
+    });
+
+    it('says when a merge is in progress', () => {
+      expect(header(withHead({hash: 'h000000', branch: 'main', merging: true}))).toContain(
+        'atual: main (merge em andamento)',
+      );
+    });
+
+    it('follows the branch after a checkout', async () => {
+      const load = vi
+        .fn<LoadGraph>()
+        .mockResolvedValue({rows: data(5).rows, refs: {...refs, head: {hash: 'h000002', branch: 'feature'}}});
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={() => Promise.resolve()} />,
+      );
+      await press(stdin, 'j', 'j', 'c', '\r');
+      await tick();
+      expect((lastFrame() ?? '').split('\n')[0]).toContain('atual: feature');
+    });
+  });
+
+  describe('merge', () => {
+    const branchTarget = (name: string, remote = false): MergeTarget => ({kind: 'branch', name, remote});
+    const actions = (overrides: Partial<MergeActions> = {}): MergeActions => ({...noMerge, ...overrides});
+    const open = (merge: MergeActions, initial: GraphData = data(5), load = vi.fn<LoadGraph>().mockResolvedValue(initial)) => ({
+      load,
+      ...render(<Browser initial={initial} initialLimit={100} load={load} merge={merge} />),
+    });
+    // The test refs put "feature" at h000002 (third row) and HEAD (main) at h000000.
+    const toFeature = ['j', 'j', 'm'];
+
+    it('asks for confirmation and merges the branch at the commit into the current one', async () => {
+      const merge = vi.fn().mockResolvedValue('merged');
+      const {lastFrame, stdin, load} = open(actions({merge}));
+      await press(stdin, ...toFeature);
+      expect(lastFrame()).toContain('Merge de feature em main?');
+      expect(lastFrame()).toContain('Fast-forward quando possível');
+      expect(merge).not.toHaveBeenCalled();
+
+      await press(stdin, '\r');
+      await tick();
+      expect(merge).toHaveBeenCalledWith(branchTarget('feature'));
+      expect(load).toHaveBeenCalled();
+      expect(lastFrame()).toContain('merge de feature em main concluído');
+    });
+
+    it('also confirms with y and cancels with Esc or n', async () => {
+      const merge = vi.fn().mockResolvedValue('merged');
+      const {stdin} = open(actions({merge}));
+      await press(stdin, ...toFeature, 'y');
+      await tick();
+      expect(merge).toHaveBeenCalledTimes(1);
+
+      for (const key of ['\u001b', 'n']) {
+        merge.mockClear();
+        await press(stdin, 'm', key);
+        await tick();
+        expect(merge).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each([
+      ['fast-forward', 'fast-forward: main avançou até feature'],
+      ['up-to-date', 'feature já está incluído em main'],
+    ] as const)('reports %s', async (result, text) => {
+      const {lastFrame, stdin} = open(actions({merge: vi.fn().mockResolvedValue(result)}));
+      await press(stdin, ...toFeature, '\r');
+      await tick();
+      expect(lastFrame()).toContain(text);
+    });
+
+    it('lets you pick among several branches, remote ones marked', async () => {
+      const merge = vi.fn().mockResolvedValue('merged');
+      const many: GraphData = {
+        rows: data(5).rows,
+        refs: {
+          byCommit: new Map([
+            ['h000000', [{name: 'main', kind: 'branch'}]],
+            ['h000001', [{name: 'zeta', kind: 'branch'}, {name: 'origin/alpha', kind: 'remote'}, {name: 'main', kind: 'branch'}]],
+          ]),
+          head: {hash: 'h000000', branch: 'main'},
+        },
+      };
+      const {lastFrame, stdin} = open(actions({merge}), many);
+      await press(stdin, 'j', 'm');
+      const lines = (lastFrame() ?? '').split('\n');
+      expect(lines.some(l => l.includes('Merge de qual branch em main?'))).toBe(true);
+      // Local branches first, the current branch (main) left out, remote marked.
+      const first = lines.findIndex(l => l.includes('> zeta'));
+      expect(first).toBeGreaterThan(-1);
+      expect(lines[first + 1]).toContain('origin/alpha (remota)');
+      expect(lines.some(l => /\s> main\b|> main$/.test(l))).toBe(false);
+
+      await press(stdin, '\u001b[B', '\r');
+      await tick();
+      expect(merge).toHaveBeenCalledWith(branchTarget('origin/alpha', true));
+    });
+
+    it('merges the commit itself when no branch points at it', async () => {
+      const merge = vi.fn().mockResolvedValue('merged');
+      const {lastFrame, stdin} = open(actions({merge}));
+      await press(stdin, 'j', 'm');
+      expect(lastFrame()).toContain('Merge de h000001 (commit) em main?');
+      expect(lastFrame()).toContain('Nenhuma branch aponta para este commit');
+      await press(stdin, '\r');
+      await tick();
+      expect(merge).toHaveBeenCalledWith({kind: 'commit', hash: 'h000001'});
+    });
+
+    it('refuses with a notice where a merge makes no sense', async () => {
+      const merge = vi.fn();
+      // The first row is the current commit.
+      const {lastFrame, stdin} = open(actions({merge}));
+      await press(stdin, 'm');
+      expect(lastFrame()).toContain('esse já é o commit da branch atual');
+
+      const detached = open(actions({merge}), {rows: data(3).rows, refs: {...refs, head: {hash: 'h000000', branch: null}}});
+      await press(detached.stdin, 'j', 'm');
+      expect(detached.lastFrame()).toContain('HEAD destacado: troque para uma branch antes do merge');
+
+      const stashed = data(3);
+      stashed.rows = layoutGraph([{...linear(3)[0]!, stash: true}, ...linear(3).slice(1)]);
+      const onStash = open(actions({merge}), stashed);
+      await press(onStash.stdin, 'm');
+      expect(onStash.lastFrame()).toContain('um stash não pode ser mesclado');
+      expect(merge).not.toHaveBeenCalled();
+    });
+
+    it('shows a refusal from git on one line and changes nothing', async () => {
+      const merge = vi.fn().mockRejectedValue(new Error('error: Your local changes would be overwritten by merge:\n\ta.txt\nAborting'));
+      const {lastFrame, stdin, load} = open(actions({merge}), data(5), vi.fn<LoadGraph>());
+      await press(stdin, ...toFeature, '\r');
+      await tick();
+      expect(lastFrame()).toContain('erro: Your local changes would be overwritten by merge: a.txt Aborting');
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    describe('with conflicts', () => {
+      const conflicted = (files = ['a.txt', 'b.txt']) =>
+        vi.fn().mockRejectedValue(new MergeConflictError(files));
+
+      it('names the files and offers to abort or leave it in progress', async () => {
+        const {lastFrame, stdin, load} = open(actions({merge: conflicted()}));
+        await press(stdin, ...toFeature, '\r');
+        await tick();
+        const frame = lastFrame() ?? '';
+        expect(frame).toContain('Merge com conflitos (2 arquivos)');
+        expect(frame).toContain('a.txt, b.txt');
+        expect(frame).toContain('> Abortar o merge (git merge --abort)');
+        expect(frame).toContain('Deixar em andamento (resolva no terminal)');
+        expect(frame).toContain('a aborta');
+        // The view is refreshed so the header can say a merge is in progress.
+        expect(load).toHaveBeenCalled();
+      });
+
+      it('aborts with a, or with Enter on the first option', async () => {
+        for (const keys of [['a'], ['\r']]) {
+          const abort = vi.fn().mockResolvedValue(undefined);
+          const {lastFrame, stdin} = open(actions({merge: conflicted(), abort}));
+          await press(stdin, ...toFeature, '\r');
+          await tick();
+          await press(stdin, ...keys);
+          await tick();
+          expect(abort).toHaveBeenCalledTimes(1);
+          expect(lastFrame()).toContain('merge abortado');
+          expect(lastFrame()).not.toContain('Merge com conflitos');
+        }
+      });
+
+      it('leaves it in progress with d, Esc, or the second option', async () => {
+        for (const keys of [['d'], ['\u001b'], ['\u001b[B', '\r']]) {
+          const abort = vi.fn();
+          const {lastFrame, stdin} = open(actions({merge: conflicted(), abort}));
+          await press(stdin, ...toFeature, '\r');
+          await tick();
+          await press(stdin, ...keys);
+          await tick();
+          expect(abort).not.toHaveBeenCalled();
+          expect(lastFrame()).toContain('merge deixado em andamento');
+          expect(lastFrame()).not.toContain('Merge com conflitos');
+        }
+      });
+
+      it('shows a failed abort as an error', async () => {
+        const abort = vi.fn().mockRejectedValue(new Error('fatal: There is no merge to abort'));
+        const {lastFrame, stdin} = open(actions({merge: conflicted(), abort}));
+        await press(stdin, ...toFeature, '\r');
+        await tick();
+        await press(stdin, 'a');
+        await tick();
+        expect(lastFrame()).toContain('erro: There is no merge to abort');
+      });
+    });
+
+    it('reopens the dialog for a merge already in progress', async () => {
+      const conflicts = vi.fn().mockResolvedValue(['x.txt']);
+      const abort = vi.fn().mockResolvedValue(undefined);
+      const inProgress: GraphData = {rows: data(5).rows, refs: {...refs, head: {hash: 'h000000', branch: 'main', merging: true}}};
+      const {lastFrame, stdin} = open(actions({conflicts, abort}), inProgress);
+      await press(stdin, 'm');
+      await tick();
+      expect(conflicts).toHaveBeenCalled();
+      expect(lastFrame()).toContain('Merge com conflitos (1 arquivo)');
+      expect(lastFrame()).toContain('x.txt');
+      await press(stdin, 'a');
+      await tick();
+      expect(abort).toHaveBeenCalled();
+    });
+
+    it('shows a merge in progress with no conflicted files as such', async () => {
+      const inProgress: GraphData = {rows: data(5).rows, refs: {...refs, head: {hash: 'h000000', branch: 'main', merging: true}}};
+      const {lastFrame, stdin} = open(actions({conflicts: vi.fn().mockResolvedValue([])}), inProgress);
+      await press(stdin, 'm');
+      await tick();
+      expect(lastFrame()).toContain('Merge em andamento');
+    });
+
+    it('advertises the key in the footer', () => {
+      const {lastFrame} = open(noMerge);
+      expect(lastFrame()).toContain('m merge');
+      expect(lastFrame()).toContain('q sair');
     });
   });
 });
