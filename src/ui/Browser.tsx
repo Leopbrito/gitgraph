@@ -204,6 +204,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
+    else if (input === 'c' && commit?.stash) setNotice('um stash não pode ser usado em checkout');
     else if (input === 'c' && commit && !loading) {
       const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
       const only = targets.length === 1 ? targets[0] : undefined;

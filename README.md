@@ -42,10 +42,11 @@ gitgraph [opções]
 | `--ascii` | Usa só caracteres ASCII no grafo e nos símbolos da interface. |
 | `--compact` | Uma linha por commit, sem a linha de ligação (`│`) entre eles. Por padrão, commits seguidos são ligados por um traço, o que ocupa mais linhas. |
 | `--order <ordem>` | Ordem dos commits: `date` (padrão, por data do commit), `author-date` (por data do autor) ou `topo` (mantém cada linha de história junta). A ordem por data intercala as branches e deixa o grafo bem mais estreito; `topo` pode ser melhor em históricos com poucas branches longas e simultâneas. |
+| `--no-stash` | Não mostra os stashes no grafo. |
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
 
-Mostra todas as branches locais e remotas e as tags (o stash fica de fora).
+Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como um nó oco (`○`, `o` com `--ascii`) com o rótulo `(stash@{0})`, logo acima do commit em que foi feito; os commits internos que o git cria para o stash (índice e arquivos não rastreados) ficam escondidos. Um stash só aparece se o commit-base estiver na lista (por exemplo, `-n` pode cortá-lo, e um filtro de branch que não inclua o commit-base também). Use `--no-stash` para não mostrá-los.
 
 ### Teclas (modo interativo)
 
@@ -53,7 +54,7 @@ Mostra todas as branches locais e remotas e as tags (o stash fica de fora).
 | --- | --- |
 | `j` / `↓`, `k` / `↑` | Move a seleção |
 | `PgDn`, `PgUp` | Anda uma página |
-| `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
+| `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Num stash, só avisa que não dá para fazer checkout. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
 | `g` / `Home`, `G` / `End` | Vai ao início, ao fim |
 | `/` | Filtra por uma ou mais branches: digite para buscar, `↑`/`↓` movem, `Espaço` marca/desmarca, `Enter` aplica, `Esc` cancela |
 | `q` | Sai |

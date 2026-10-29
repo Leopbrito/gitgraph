@@ -33,8 +33,8 @@ async function main() {
       loadCommits(
         cwd,
         revs.length === 0
-          ? {all: true, maxCount, order: options.order}
-          : {revs, maxCount, order: options.order},
+          ? {all: true, maxCount, order: options.order, stashes: options.stash}
+          : {revs, maxCount, order: options.order, stashes: options.stash},
       ),
       loadRefs(cwd),
     ]);

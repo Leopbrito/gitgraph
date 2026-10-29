@@ -149,3 +149,23 @@ describe('toAscii', () => {
     }
   });
 });
+
+describe('stash nodes', () => {
+  const stash = (hash: string, ...parents: string[]): Commit => ({...c(hash, ...parents), stash: true});
+
+  it('draws a hollow node for a stash above its base', () => {
+    expect(draw([stash('S', 'base'), c('base')])).toEqual(['○', '●']);
+    expect(draw([stash('S', 'base'), c('base')], {spaced: true})).toEqual(['○', '│', '●']);
+  });
+
+  it('joins the lane of a base that already has one', () => {
+    // t is a branch tip with a lane waiting for base; the stash hangs on the same base.
+    expect(draw([c('t', 'base'), stash('S', 'base'), c('base')])).toEqual(['●', '│ ○', '├─╯', '●']);
+  });
+
+  it('turns the hollow node into "o" in ASCII', () => {
+    const [row] = layoutGraph([stash('S', 'base'), c('base')]);
+    const {node} = renderGraphLines(row!, 1);
+    expect(cellsToText(toAscii(node)).trimEnd()).toBe('o');
+  });
+});

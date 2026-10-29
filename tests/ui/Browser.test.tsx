@@ -27,7 +27,7 @@ const commit = (n: number, parents: string[]): Commit => ({
   body: '',
 });
 
-/** Histórico linear de `count` commits (o 0 é o mais novo). */
+/** Linear history of `count` commits (0 is the newest). */
 function linear(count: number): Commit[] {
   return Array.from({length: count}, (_, i) =>
     commit(i, i + 1 < count ? [commit(i + 1, []).hash] : []),
@@ -523,6 +523,44 @@ describe('Browser', () => {
       await tick();
       expect(load).toHaveBeenCalledWith(['a', 'b', 'c'], 100);
       expect(lastFrame()).toContain('a, b +1');
+    });
+  });
+
+  describe('stashes', () => {
+    const withStash = (): GraphData => {
+      const commits = linear(4);
+      // The newest row is a stash node whose only parent is the next commit.
+      commits[0] = {...commits[0]!, subject: 'On main: wip', stash: true};
+      return {
+        rows: layoutGraph(commits),
+        refs: {
+          byCommit: new Map([['h000000', [{name: 'stash@{0}', kind: 'stash' as const}]]]),
+          head: {hash: 'h000001', branch: 'main'},
+        },
+      };
+    };
+
+    it('shows the stash as a hollow node with its label', () => {
+      const {lastFrame} = render(<Browser initial={withStash()} initialLimit={100} load={vi.fn()} />);
+      expect(lastFrame()).toMatch(/○ >h000000 \(stash@\{0\}\) On main: wip/);
+      expect(lastFrame()).toContain('●');
+    });
+
+    it('does not offer a checkout for a stash row', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>();
+      const {lastFrame, stdin} = render(
+        <Browser initial={withStash()} initialLimit={100} load={vi.fn()} checkout={checkout} />,
+      );
+      await press(stdin, 'c');
+      expect(lastFrame()).toContain('um stash não pode ser usado em checkout');
+      expect(lastFrame()).not.toContain('Checkout para');
+      expect(checkout).not.toHaveBeenCalled();
+    });
+
+    it('still offers a checkout on the commit below the stash', async () => {
+      const {lastFrame, stdin} = render(<Browser initial={withStash()} initialLimit={100} load={vi.fn()} />);
+      await press(stdin, 'j', 'c');
+      expect(lastFrame()).toContain('Checkout para');
     });
   });
 });

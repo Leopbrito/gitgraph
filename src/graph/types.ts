@@ -7,9 +7,11 @@ export interface Commit {
   date: string;
   subject: string;
   body: string;
+  /** A stash entry, shown as a single node above its base commit. */
+  stash?: true;
 }
 
-export type RefKind = 'branch' | 'remote' | 'tag';
+export type RefKind = 'branch' | 'remote' | 'tag' | 'stash';
 
 export interface Ref {
   name: string;

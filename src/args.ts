@@ -10,6 +10,8 @@ export interface CliOptions {
   compact: boolean;
   /** How commits are ordered (see `CommitOrder`). */
   order: CommitOrder;
+  /** Show the stash entries in the graph. */
+  stash: boolean;
   help: boolean;
   version: boolean;
 }
@@ -27,6 +29,7 @@ Opções:
       --ascii          usa só caracteres ASCII no grafo
       --compact        uma linha por commit, sem a linha de ligação entre eles
       --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
+      --no-stash       não mostra os stashes no grafo
   -h, --help           mostra esta ajuda
   -v, --version        mostra a versão
 
@@ -46,6 +49,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         ascii: {type: 'boolean'},
         compact: {type: 'boolean'},
         order: {type: 'string'},
+        'no-stash': {type: 'boolean'},
         help: {type: 'boolean', short: 'h'},
         version: {type: 'boolean', short: 'v'},
       },
@@ -70,6 +74,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     ascii: values.ascii ?? false,
     compact: values.compact ?? false,
     order,
+    stash: !values['no-stash'],
     help: values.help ?? false,
     version: values.version ?? false,
   };

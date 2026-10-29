@@ -28,4 +28,18 @@ describe('formatRefs', () => {
     const labels = formatRefs([{name: 'main', kind: 'branch'}], {isHead: false, branch: 'main'});
     expect(labels.map(l => l.text)).toEqual(['main']);
   });
+
+  it('labels a stash in magenta, after the tags', () => {
+    const labels = formatRefs(
+      [
+        {name: 'stash@{0}', kind: 'stash'},
+        {name: 'v1', kind: 'tag'},
+      ],
+      {isHead: false, branch: null},
+    );
+    expect(labels).toEqual([
+      {text: 'tag: v1', color: 'yellow'},
+      {text: 'stash@{0}', color: 'magenta'},
+    ]);
+  });
 });

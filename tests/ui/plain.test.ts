@@ -50,4 +50,17 @@ describe('formatPlain', () => {
     ]);
     expect(formatPlain(rows, refs, {ascii: true})).toHaveLength(2);
   });
+
+  it('shows a stash as a hollow node with its label', () => {
+    const rows = layoutGraph([{...c('5555555eee', 'On main: wip', '6666666fff'), stash: true}, c('6666666fff', 'base')]);
+    const refs: RefInfo = {
+      byCommit: new Map([['5555555eee', [{name: 'stash@{0}', kind: 'stash'}]]]),
+      head: {hash: null, branch: null},
+    };
+    const [stashLine, baseLine] = formatPlain(rows, refs);
+    expect(stashLine).toContain('○');
+    expect(stashLine).toContain('(stash@{0}) On main: wip');
+    expect(baseLine).toContain('●');
+    expect(formatPlain(rows, refs, {ascii: true})[0]).toMatch(/^o /);
+  });
 });

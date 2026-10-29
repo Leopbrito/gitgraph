@@ -32,8 +32,9 @@ src/
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
-    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount/order; `all` exclui o stash; repo vazio devolve [])
+    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
+    stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     checkout.ts    # checkoutTargets()/isCurrent()/describeTarget()/describeOption() (puros) e checkout() via `git switch` (+ `pull --ff-only`)
   graph/
@@ -94,6 +95,10 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 ### Ordem dos commits
 
 `loadCommits` aceita `order` (`COMMIT_ORDERS` em `log.ts`): `date` (padrão, `git log --date-order`), `author-date` e `topo` (`--topo-order`). Todas garantem que nenhum pai aparece antes dos filhos, de que o layout depende. A escolha muda muito a largura do grafo, porque decide quanto tempo cada lane fica aberta: com `--topo-order` cada linha de história sai inteira antes da seguinte, então um merge abre uma lane que espera por um commit distante; com `--date-order` os commits da branch ficam perto do merge que os incorporou e as lanes são curtas. Num histórico real com ~90 commits e PRs de uma mesma branch de feature, a largura foi de 14 colunas (`topo`) para 2 (`date`), que é também o que o Git Graph do VS Code faz por padrão. `--max-count` não muda o prefixo da lista nas três ordens (git ordena tudo antes de cortar), o que a carga sob demanda exige; há teste para isso.
+
+### Stashes
+
+Cada entrada do stash é um commit com 2 ou 3 pais: o commit-base e commits internos (índice e, com `-u`, arquivos não rastreados). Por isso o `--all` exclui `refs/stash`. Com `loadCommits({stashes: true})`, `withStashes` (em `log.ts`) lê as entradas (`loadStashes`) e insere cada uma como **um nó** (`Commit.stash = true`) com **só o commit-base como pai**, logo **acima do commit-base** e não na data: assim não abre uma lane longa do topo até a base, e as linhas já mostradas não se deslocam quando mais histórico é carregado. Vários stashes na mesma base ficam empilhados, do mais novo para o mais antigo. Um stash cuja base não está na lista (`-n`, filtro de branch) é omitido. Falhas ao ler o stash viram "sem stashes" para não derrubar o grafo. `loadRefs` etiqueta cada commit de stash com `{kind: 'stash', name: 'stash@{n}'}`; stash não é branch, então não entra em `branchNames` nem em `localBranchTips`. O desenho usa um nó oco (`○`, `o` em ASCII) e o rótulo em magenta. No `Browser`, `c` numa linha de stash só mostra um aviso: um commit de stash não é uma linha de história. `--no-stash` desliga tudo isso.
 
 ### Opções e erros
 

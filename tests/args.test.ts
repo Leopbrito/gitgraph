@@ -9,6 +9,7 @@ describe('parseCliArgs', () => {
       ascii: false,
       compact: false,
       order: 'date',
+      stash: true,
       help: false,
       version: false,
     });
@@ -57,5 +58,10 @@ describe('parseCliArgs', () => {
 
   it.each(['topological', '', 'DATE'])('rejects --order %j', value => {
     expect(() => parseCliArgs([`--order=${value}`])).toThrow(/--order deve ser date, author-date, topo/);
+  });
+
+  it('shows stashes by default and hides them with --no-stash', () => {
+    expect(parseCliArgs([]).stash).toBe(true);
+    expect(parseCliArgs(['--no-stash']).stash).toBe(false);
   });
 });

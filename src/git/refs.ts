@@ -1,5 +1,6 @@
 import type {Ref, RefKind} from '../graph/types.js';
 import {git} from './exec.js';
+import {loadStashes} from './stash.js';
 
 export interface RefInfo {
   /** Refs agrupadas pelo hash do commit apontado. */
@@ -54,6 +55,12 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
   const branch = await git(['symbolic-ref', '--short', '-q', 'HEAD'], cwd)
     .then(out => out.trim())
     .catch(() => null);
+  // Stashes are not under refs/ with a usable name; each entry gets `stash@{n}`.
+  for (const {hash: stashHash, name} of await loadStashes(cwd)) {
+    const list = byCommit.get(stashHash) ?? [];
+    list.push({name, kind: 'stash'});
+    byCommit.set(stashHash, list);
+  }
   return {byCommit, head: {hash, branch}};
 }
 

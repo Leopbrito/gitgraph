@@ -2,7 +2,7 @@ import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {loadCommits} from '../../src/git/log.js';
-import {loadRefs} from '../../src/git/refs.js';
+import {loadRefs, localBranchTips} from '../../src/git/refs.js';
 import {createRepo} from './helpers.js';
 
 const cleanups: (() => void)[] = [];
@@ -210,6 +210,113 @@ describe('repositório com branch e merge', () => {
       const viaAll = (await loadCommits(dir, {all: true, order: 'topo'})).map(c => c.subject);
       const viaRev = (await loadCommits(dir, {revs: ['main'], order: 'topo'})).map(c => c.subject);
       expect(viaAll).toEqual(viaRev);
+    });
+  });
+
+  describe('stashes', () => {
+    /** main: one -> two, with two stashes on "two" (the second also has an untracked file). */
+    function stashed() {
+      const {dir, run} = repo();
+      const file = join(dir, 'a.txt');
+      writeFileSync(file, 'v1');
+      run('add', 'a.txt');
+      run('commit', '-q', '-m', 'one');
+      writeFileSync(file, 'v2');
+      run('commit', '-q', '-am', 'two');
+      writeFileSync(file, 'wip A');
+      run('stash', 'push', '-q', '-m', 'wip A');
+      writeFileSync(file, 'wip B');
+      writeFileSync(join(dir, 'new.txt'), 'untracked');
+      run('stash', 'push', '-u', '-q', '-m', 'wip B');
+      return {dir, run, file};
+    }
+    const subjects = async (dir: string, options = {}) =>
+      (await loadCommits(dir, {stashes: true, ...options})).map(c => c.subject);
+
+    it('leaves them out unless asked', async () => {
+      const {dir} = stashed();
+      expect((await loadCommits(dir)).map(c => c.subject)).toEqual(['two', 'one']);
+      expect((await loadCommits(dir, {all: true})).map(c => c.subject)).toEqual(['two', 'one']);
+    });
+
+    it('adds each one as a single node right above its base, newest first', async () => {
+      const {dir, run} = stashed();
+      const commits = await loadCommits(dir, {stashes: true});
+      expect(commits.map(c => c.subject)).toEqual(['On main: wip B', 'On main: wip A', 'two', 'one']);
+
+      const base = run('rev-parse', 'main');
+      const [newest, older] = commits;
+      expect(newest?.hash).toBe(run('rev-parse', 'stash@{0}'));
+      expect(older?.hash).toBe(run('rev-parse', 'stash@{1}'));
+      // Only the commit the stash was made on stays as a parent.
+      expect(newest?.parents).toEqual([base]);
+      expect(older?.parents).toEqual([base]);
+      expect(newest?.stash).toBe(true);
+      expect(commits.slice(2).every(c => c.stash === undefined)).toBe(true);
+    });
+
+    it('hides the internal commits (index and untracked files)', async () => {
+      const {dir} = stashed();
+      for (const options of [{}, {all: true}, {revs: ['main']}]) {
+        const all = await subjects(dir, options);
+        expect(all.filter(s => /^(index on|untracked files on)/.test(s))).toEqual([]);
+        expect(all).toHaveLength(4);
+      }
+    });
+
+    it('does not duplicate a stash that --all would also list', async () => {
+      const {dir} = stashed();
+      const commits = await loadCommits(dir, {all: true, stashes: true});
+      expect(commits.filter(c => c.stash)).toHaveLength(2);
+      expect(new Set(commits.map(c => c.hash)).size).toBe(commits.length);
+    });
+
+    it('leaves out a stash whose base is not in the list', async () => {
+      const {dir, run} = repo();
+      const file = join(dir, 'a.txt');
+      writeFileSync(file, 'x');
+      run('add', 'a.txt');
+      run('commit', '-q', '-m', 'old');
+      writeFileSync(file, 'y');
+      run('stash', 'push', '-q', '-m', 'on old');
+      writeFileSync(file, 'z');
+      run('commit', '-q', '-am', 'new');
+      // maxCount 1 stops before "old", the stash's base.
+      expect(await subjects(dir, {maxCount: 1})).toEqual(['new']);
+      expect(await subjects(dir, {maxCount: 2})).toEqual(['new', 'On main: on old', 'old']);
+    });
+
+    it('keeps a stash above its base in every ordering, never after it', async () => {
+      const {dir} = stashed();
+      for (const order of ['date', 'author-date', 'topo'] as const) {
+        const commits = await loadCommits(dir, {stashes: true, order});
+        const position = new Map(commits.map((c, i) => [c.hash, i]));
+        for (const c of commits) {
+          for (const parent of c.parents) {
+            expect(position.get(parent)!).toBeGreaterThan(position.get(c.hash)!);
+          }
+        }
+      }
+    });
+
+    it('does nothing in a repository without stashes or without commits', async () => {
+      const {dir, run} = repo();
+      expect(await loadCommits(dir, {stashes: true})).toEqual([]);
+      run('commit', '--allow-empty', '-q', '-m', 'base');
+      expect(await subjects(dir)).toEqual(['base']);
+    });
+
+    it('labels the stash commits in the refs', async () => {
+      const {dir, run} = stashed();
+      const refs = await loadRefs(dir);
+      expect(refs.byCommit.get(run('rev-parse', 'stash@{0}'))).toEqual([
+        {name: 'stash@{0}', kind: 'stash'},
+      ]);
+      expect(refs.byCommit.get(run('rev-parse', 'stash@{1}'))).toEqual([
+        {name: 'stash@{1}', kind: 'stash'},
+      ]);
+      // A stash is not a branch: it must not show up as a filter or checkout target.
+      expect([...localBranchTips(refs.byCommit).keys()]).toEqual(['main']);
     });
   });
 });

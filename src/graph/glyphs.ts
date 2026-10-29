@@ -72,7 +72,9 @@ export function renderGraphLines(
 function renderNode(row: GraphRow, width: number): Cell[] {
   const cells: Cell[] = [];
   for (let c = 0; c < width; c++) {
-    const char = c === row.column ? '●' : c < row.lanesBefore.length ? '│' : ' ';
+    // A stash is a hollow node, so it stands out from the commits.
+    const node = row.commit.stash ? '○' : '●';
+    const char = c === row.column ? node : c < row.lanesBefore.length ? '│' : ' ';
     const color = row.colorsBefore[c] ?? 0;
     cells.push({char, color}, {char: ' ', color});
   }
@@ -159,6 +161,7 @@ function renderConnector(row: GraphRow, width: number): Cell[] {
 
 const ASCII: Record<string, string> = {
   '●': '*',
+  '○': 'o',
   '│': '|',
   '─': '-',
   '╱': '/',

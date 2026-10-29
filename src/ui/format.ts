@@ -2,7 +2,7 @@ import type {Ref} from '../graph/types.js';
 
 export interface Label {
   text: string;
-  color: 'green' | 'red' | 'yellow' | 'cyan';
+  color: 'green' | 'red' | 'yellow' | 'cyan' | 'magenta';
 }
 
 export interface HeadInfo {
@@ -30,6 +30,9 @@ export function formatRefs(refs: Ref[], head: HeadInfo): Label[] {
   }
   for (const ref of refs.filter(r => r.kind === 'tag')) {
     labels.push({text: `tag: ${ref.name}`, color: 'yellow'});
+  }
+  for (const ref of refs.filter(r => r.kind === 'stash')) {
+    labels.push({text: ref.name, color: 'magenta'});
   }
   return labels;
 }
