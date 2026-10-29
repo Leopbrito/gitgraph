@@ -28,9 +28,9 @@ async function main() {
 
   const cwd = process.cwd();
   // Refs are read on every load: after a checkout, HEAD has moved.
-  const graph = async (rev: string | null, maxCount: number | undefined) => {
+  const graph = async (revs: string[], maxCount: number | undefined) => {
     const [commits, refs] = await Promise.all([
-      loadCommits(cwd, rev === null ? {all: true, maxCount} : {revs: [rev], maxCount}),
+      loadCommits(cwd, revs.length === 0 ? {all: true, maxCount} : {revs, maxCount}),
       loadRefs(cwd),
     ]);
     return {rows: layoutGraph(commits), refs};
@@ -38,7 +38,7 @@ async function main() {
 
   // Sem TTY (pipe/redirecionamento) a saída é texto puro e completa, como o `git log`.
   if (!process.stdout.isTTY) {
-    const {rows, refs} = await graph(null, options.maxCount);
+    const {rows, refs} = await graph([], options.maxCount);
     if (rows.length === 0) {
       console.error('gitgraph: o repositório não tem commits');
       return;
@@ -52,9 +52,9 @@ async function main() {
     return;
   }
 
-  const load: LoadGraph = (rev, limit) => graph(rev, limit);
+  const load: LoadGraph = (revs, limit) => graph(revs, limit);
   const initialLimit = options.maxCount ?? DEFAULT_LIMIT;
-  const initial = await load(null, initialLimit);
+  const initial = await load([], initialLimit);
   const {waitUntilExit} = render(
     <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact}}>
       <Browser

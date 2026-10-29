@@ -15,7 +15,7 @@ import {CheckoutPrompt} from './CheckoutPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {separator, tint, useDisplay} from './display.js';
 import {GraphRowView} from './GraphRowView.js';
-import {branchNames, pickerOptions} from './picker.js';
+import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
 import {clamp, scrollIntoView, visibleEnd} from './viewport.js';
 
 export interface GraphData {
@@ -23,8 +23,8 @@ export interface GraphData {
   refs: RefInfo;
 }
 
-/** Carrega o grafo de uma branch (null = todas), com no máximo `limit` commits. */
-export type LoadGraph = (rev: string | null, limit: number) => Promise<GraphData>;
+/** Loads the graph of the given branches (empty = all), with at most `limit` commits. */
+export type LoadGraph = (revs: string[], limit: number) => Promise<GraphData>;
 
 interface Props {
   initial: GraphData;
@@ -52,10 +52,10 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
   const dot = separator(display);
   const {columns, rows: terminalRows} = useWindowSize();
   const [data, setData] = useState(initial);
-  const [rev, setRev] = useState<string | null>(null);
+  const [revs, setRevs] = useState<string[]>([]);
   const [limit, setLimit] = useState(initialLimit);
   const [cursor, setCursor] = useState({selected: 0, offset: 0});
-  const [picker, setPicker] = useState<{query: string; index: number} | null>(null);
+  const [picker, setPicker] = useState<{query: string; index: number; selected: string[]} | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -81,11 +81,11 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
   const pageSize = Math.max(1, end - offset);
 
   const reload = useCallback(
-    (nextRev: string | null, nextLimit: number, resetCursor: boolean) => {
+    (nextRevs: string[], nextLimit: number, resetCursor: boolean) => {
       const id = ++request.current;
       setLoading(true);
       setError(null);
-      load(nextRev, nextLimit)
+      load(nextRevs, nextLimit)
         .then(next => {
           if (id !== request.current) return;
           setData(next);
@@ -108,9 +108,9 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
     if (canGrow && total >= limit && cursor.selected >= total - LOAD_AHEAD) {
       const next = Math.min(limit * 2, maxCommits ?? Infinity);
       setLimit(next);
-      reload(rev, next, false);
+      reload(revs, next, false);
     }
-  }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, rev, reload]);
+  }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, revs, reload]);
 
   const select = (index: number) =>
     setCursor({
@@ -133,12 +133,12 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
       .then(() => {
         setNotice(`agora em ${describeTarget(target)}`);
         // Refreshes refs so the HEAD marker moves; the cursor stays where it is.
-        reload(rev, limit, false);
+        reload(revs, limit, false);
       })
       .catch(e => {
         const message = oneLine(e instanceof Error ? e.message : String(e));
         // The switch happened and only the pull failed: refresh so HEAD is right.
-        if (e instanceof PartialCheckoutError) reload(rev, limit, false);
+        if (e instanceof PartialCheckoutError) reload(revs, limit, false);
         else setLoading(false);
         // After reload(), which clears the error when it starts.
         setError(message);
@@ -167,21 +167,30 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
       if (key.escape) {
         setPicker(null);
       } else if (key.return) {
-        const choice = options[picker.index];
+        const next = chosenRevs(picker.selected, branches, options[picker.index]);
         setPicker(null);
-        if (choice) {
-          setRev(choice.rev);
+        if (next) {
+          setRevs(next);
           setLimit(initialLimit);
-          reload(choice.rev, initialLimit, true);
+          reload(next, initialLimit, true);
+        }
+      } else if (input === ' ') {
+        // Branch names have no spaces, so Space is free to toggle the selection.
+        const option = options[picker.index];
+        if (option) {
+          setPicker({
+            ...picker,
+            selected: option.rev === null ? [] : toggleBranch(picker.selected, option.rev),
+          });
         }
       } else if (key.upArrow) {
         setPicker({...picker, index: clamp(picker.index - 1, 0, options.length - 1)});
       } else if (key.downArrow) {
         setPicker({...picker, index: clamp(picker.index + 1, 0, options.length - 1)});
       } else if (key.backspace || key.delete) {
-        setPicker({query: picker.query.slice(0, -1), index: 0});
+        setPicker({...picker, query: picker.query.slice(0, -1), index: 0});
       } else if (input && !key.ctrl && !key.meta) {
-        setPicker({query: picker.query + input, index: 0});
+        setPicker({...picker, query: picker.query + input, index: 0});
       }
       return;
     }
@@ -194,7 +203,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
     else if (key.pageUp) select(cursor.selected - pageSize);
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
-    else if (input === '/') setPicker({query: '', index: 0});
+    else if (input === '/') setPicker({query: '', index: 0, selected: revs});
     else if (input === 'c' && commit && !loading) {
       const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
       const only = targets.length === 1 ? targets[0] : undefined;
@@ -215,6 +224,12 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
     branch: data.refs.head.branch,
   });
   const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const filterLabel =
+    revs.length === 0
+      ? 'todas as branches'
+      : revs.length <= 2
+        ? revs.join(', ')
+        : `${revs.slice(0, 2).join(', ')} +${revs.length - 2}`;
   const more = canGrow && total >= limit;
 
   return (
@@ -222,7 +237,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
       <Text wrap="truncate-end">
         <Text bold>gitgraph</Text>
         <Text dimColor>
-          {` ${dot} ${rev ?? 'todas as branches'} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
+          {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
         </Text>
       </Text>
       <Box flexDirection="column" height={listHeight} overflow="hidden">
@@ -245,6 +260,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
           query={picker.query}
           options={pickerOptions(branches, picker.query)}
           index={picker.index}
+          selected={picker.selected}
         />
       ) : (
         <CommitDetail
@@ -261,7 +277,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout}: Pro
               ? `Enter/y confirma ${dot} Esc/n cancela`
               : `${arrows} escolher ${dot} Enter confirma ${dot} Esc cancela`
             : picker
-              ? `digite para filtrar ${dot} ${arrows} escolher ${dot} Enter aplicar ${dot} Esc cancelar`
+              ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
               : (notice ??
                 `j/k ${arrows} mover ${dot} PgUp/PgDn ${dot} g/G início/fim ${dot} c checkout ${dot} / branch ${dot} q sair`)}
       </Text>

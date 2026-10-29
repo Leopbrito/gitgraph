@@ -1,6 +1,12 @@
 import {describe, expect, it} from 'vitest';
 import type {RefInfo} from '../../src/git/refs.js';
-import {ALL_LABEL, branchNames, pickerOptions} from '../../src/ui/picker.js';
+import {
+  ALL_LABEL,
+  branchNames,
+  chosenRevs,
+  pickerOptions,
+  toggleBranch,
+} from '../../src/ui/picker.js';
 
 const refs: RefInfo = {
   byCommit: new Map([
@@ -32,5 +38,44 @@ describe('pickerOptions', () => {
 
   it('devolve vazio sem correspondência', () => {
     expect(pickerOptions(names, 'zzz')).toEqual([]);
+  });
+});
+
+describe('toggleBranch', () => {
+  it('adds a branch that is not selected and removes one that is', () => {
+    expect(toggleBranch([], 'main')).toEqual(['main']);
+    expect(toggleBranch(['main'], 'dev')).toEqual(['main', 'dev']);
+    expect(toggleBranch(['main', 'dev'], 'main')).toEqual(['dev']);
+  });
+
+  it('does not mutate the previous selection', () => {
+    const before = ['main'];
+    toggleBranch(before, 'dev');
+    expect(before).toEqual(['main']);
+  });
+});
+
+describe('chosenRevs', () => {
+  const branches = ['alpha', 'beta', 'gamma'];
+  const option = (rev: string | null) => ({label: rev ?? ALL_LABEL, rev});
+
+  it('uses the checked branches, in list order', () => {
+    expect(chosenRevs(['gamma', 'alpha'], branches, option('beta'))).toEqual(['alpha', 'gamma']);
+  });
+
+  it('ignores the highlighted option when something is checked', () => {
+    expect(chosenRevs(['alpha'], branches, option(null))).toEqual(['alpha']);
+  });
+
+  it('uses the highlighted branch alone when nothing is checked', () => {
+    expect(chosenRevs([], branches, option('beta'))).toEqual(['beta']);
+  });
+
+  it('means all branches when "all" is highlighted and nothing is checked', () => {
+    expect(chosenRevs([], branches, option(null))).toEqual([]);
+  });
+
+  it('has nothing to apply without checks and without a matching option', () => {
+    expect(chosenRevs([], branches, undefined)).toBeUndefined();
   });
 });

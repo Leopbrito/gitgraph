@@ -97,7 +97,7 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('(todas as branches)');
     await press(stdin, '\r');
     await tick();
-    expect(load).toHaveBeenCalledWith('feature', 100);
+    expect(load).toHaveBeenCalledWith(['feature'], 100);
     expect(lastFrame()).toContain('feature · 1/2');
     expect(lastFrame()).not.toContain('Branch:');
   });
@@ -117,7 +117,7 @@ describe('Browser', () => {
     const {lastFrame, stdin} = render(<Browser initial={data(30)} initialLimit={30} load={load} />);
     await press(stdin, 'G');
     await tick();
-    expect(load).toHaveBeenCalledWith(null, 60);
+    expect(load).toHaveBeenCalledWith([], 60);
     expect(lastFrame()).toContain('/60');
   });
 
@@ -164,7 +164,7 @@ describe('Browser', () => {
     await tick();
     // 30 -> min(60, 40) = 40; ao atingir o teto, não pede mais.
     expect(load).toHaveBeenCalledTimes(1);
-    expect(load).toHaveBeenCalledWith(null, 40);
+    expect(load).toHaveBeenCalledWith([], 40);
     await press(stdin, 'G', 'k', 'G');
     expect(load).toHaveBeenCalledTimes(1);
     expect(lastFrame()).not.toContain('/40+');
@@ -237,7 +237,7 @@ describe('Browser', () => {
       await tick();
       expect(checkout).toHaveBeenCalledWith({kind: 'branch', name: 'feature'});
       // Refs are reloaded, so the HEAD marker moves and a notice is shown.
-      expect(load).toHaveBeenCalledWith(null, 100);
+      expect(load).toHaveBeenCalledWith([], 100);
       expect(lastFrame()).toContain('HEAD -> feature');
       expect(lastFrame()).toContain('agora em feature');
       expect(lastFrame()).not.toContain('Checkout para');
@@ -422,6 +422,107 @@ describe('Browser', () => {
         // The reload must not wipe the message.
         expect(lastFrame()).toContain('mas o pull falhou');
       });
+    });
+  });
+
+  describe('filtering by several branches', () => {
+    const DOWN = '\u001b[B';
+    // The test refs have two branches, listed as: (todas), feature, main.
+    const open = () => {
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(3));
+      const view = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
+      return {...view, load};
+    };
+
+    it('checks branches with Space and applies them all with Enter', async () => {
+      const {lastFrame, stdin, load} = open();
+      await press(stdin, '/', DOWN, ' ', DOWN, ' ');
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('[x] feature');
+      expect(frame).toContain('[x] main');
+      expect(frame).toContain('[ ] (todas as branches)');
+      expect(frame).toContain('2 marcadas');
+      expect(frame).toContain('Espaço marca');
+
+      await press(stdin, '\r');
+      await tick();
+      expect(load).toHaveBeenCalledWith(['feature', 'main'], 100);
+      expect(lastFrame()).toContain('feature, main · 1/3');
+    });
+
+    it('keeps checks while the query hides them', async () => {
+      const {lastFrame, stdin, load} = open();
+      await press(stdin, '/', DOWN, ' ');
+      await press(stdin, 'm', 'a', 'i');
+      // "feature" is hidden from the picker list by the query but still checked.
+      expect(lastFrame()).not.toContain('] feature');
+      expect(lastFrame()).toContain('[ ] main');
+      expect(lastFrame()).toContain('1 marcada');
+      await press(stdin, ' ', '\r');
+      await tick();
+      expect(load).toHaveBeenCalledWith(['feature', 'main'], 100);
+    });
+
+    it('applies the highlighted branch alone when nothing is checked', async () => {
+      const {stdin, load} = open();
+      await press(stdin, '/', DOWN, '\r');
+      await tick();
+      expect(load).toHaveBeenCalledWith(['feature'], 100);
+    });
+
+    it('shows the current filter checked when the picker is reopened', async () => {
+      const {lastFrame, stdin} = open();
+      await press(stdin, '/', DOWN, ' ', DOWN, ' ', '\r');
+      await tick();
+      await press(stdin, '/');
+      expect(lastFrame()).toContain('[x] feature');
+      expect(lastFrame()).toContain('[x] main');
+    });
+
+    it('goes back to all branches with Space on "all" and Enter', async () => {
+      const {stdin, load} = open();
+      await press(stdin, '/', DOWN, ' ', '\r');
+      await tick();
+      load.mockClear();
+      await press(stdin, '/', ' ', '\r');
+      await tick();
+      expect(load).toHaveBeenCalledWith([], 100);
+    });
+
+    it('unchecks a branch with a second Space', async () => {
+      const {lastFrame, stdin} = open();
+      await press(stdin, '/', DOWN, ' ');
+      expect(lastFrame()).toContain('[x] feature');
+      await press(stdin, ' ');
+      expect(lastFrame()).toContain('[ ] feature');
+      expect(lastFrame()).not.toContain('marcada');
+    });
+
+    it('cancels with Esc, leaving the filter as it was', async () => {
+      const {lastFrame, stdin, load} = open();
+      await press(stdin, '/', DOWN, ' ', '\u001b');
+      await tick();
+      expect(load).not.toHaveBeenCalled();
+      expect(lastFrame()).toContain('todas as branches · 1/5');
+    });
+
+    it('summarizes three or more branches in the header', async () => {
+      const refs3: GraphData = {
+        rows: data(5).rows,
+        refs: {
+          byCommit: new Map([
+            ['h000000', [{name: 'a', kind: 'branch'}, {name: 'b', kind: 'branch'}]],
+            ['h000001', [{name: 'c', kind: 'branch'}]],
+          ]),
+          head: {hash: 'h000000', branch: 'a'},
+        },
+      };
+      const load = vi.fn<LoadGraph>().mockResolvedValue(refs3);
+      const {lastFrame, stdin} = render(<Browser initial={refs3} initialLimit={100} load={load} />);
+      await press(stdin, '/', DOWN, ' ', DOWN, ' ', DOWN, ' ', '\r');
+      await tick();
+      expect(load).toHaveBeenCalledWith(['a', 'b', 'c'], 100);
+      expect(lastFrame()).toContain('a, b +1');
     });
   });
 });
