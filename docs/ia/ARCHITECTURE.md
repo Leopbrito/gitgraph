@@ -26,4 +26,18 @@ repositório git ──▶ leitura dos dados ──▶ montagem do grafo ──�
 
 ## Estrutura de diretórios
 
-A definir.
+```
+src/
+  cli.tsx          # entrada (Ink)
+  git/
+    exec.ts        # executa `git` (execFile) e rejeita com o stderr
+    log.ts         # loadCommits(): git log -> Commit[] (repo vazio devolve [])
+    parse.ts       # parseLog(): texto -> Commit[] (puro)
+    refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
+  graph/
+    types.ts       # Commit, Ref
+tests/
+  git/             # parse/refs puros e integração com repos git temporários (helpers.ts)
+```
+
+Previstos nas próximas fases: `graph/layout.ts`, `graph/glyphs.ts` e `ui/`.
