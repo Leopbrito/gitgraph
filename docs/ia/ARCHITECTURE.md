@@ -35,9 +35,20 @@ src/
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
   graph/
-    types.ts       # Commit, Ref
+    types.ts       # Commit, Ref, Edge, GraphRow
+    layout.ts      # layoutGraph(): Commit[] -> GraphRow[] (puro, sem UI)
 tests/
+  graph/           # layout com commits sintéticos (sem git)
   git/             # parse/refs puros e integração com repos git temporários (helpers.ts)
 ```
 
-Previstos nas próximas fases: `graph/layout.ts`, `graph/glyphs.ts` e `ui/`.
+Previstos nas próximas fases: `graph/glyphs.ts` e `ui/`.
+
+### Modelo de layout
+
+`layoutGraph` recebe commits em ordem topológica (filhos antes dos pais) e mantém uma lista de *lanes*, em que cada coluna guarda o hash do commit esperado. Regras:
+
+- O commit fica na lane que o espera; sem lane (ponta nova), usa a primeira livre.
+- O primeiro pai herda a coluna do filho; os demais pais abrem lanes livres.
+- Pai que já tem lane recebe a aresta nela, sem duplicar lane.
+- Cada `GraphRow` expõe `lanesBefore`, `lanesAfter` e `edges`, o suficiente para desenhar linhas passantes, bifurcações e merges. Lanes livres à esquerda não são compactadas.
