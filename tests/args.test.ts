@@ -7,6 +7,7 @@ describe('parseCliArgs', () => {
       maxCount: undefined,
       color: true,
       ascii: false,
+      compact: false,
       help: false,
       version: false,
     });
@@ -27,6 +28,10 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs([], {NO_COLOR: '1'}).color).toBe(false);
     // NO_COLOR vazio não conta, conforme no-color.org.
     expect(parseCliArgs([], {NO_COLOR: ''}).color).toBe(true);
+  });
+
+  it('lê --compact', () => {
+    expect(parseCliArgs(['--compact']).compact).toBe(true);
   });
 
   it('lê --ascii, --help e --version (inclusive as formas curtas)', () => {

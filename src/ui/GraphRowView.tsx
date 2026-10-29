@@ -27,7 +27,7 @@ interface Props {
 // desalinha e commits longos não quebram em várias linhas.
 export function GraphRowView({row, graphWidth, refs, head, selected = false}: Props) {
   const display = useDisplay();
-  const lines = renderGraphLines(row, row.width);
+  const lines = renderGraphLines(row, row.width, {spaced: display.spaced});
   const {commit} = row;
   return (
     <Box flexDirection="column">

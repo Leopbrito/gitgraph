@@ -8,11 +8,11 @@ const c = (hash: string, ...parents: string[]): Commit => ({
 });
 
 /** Linhas do grafo (nó e ligação) como texto, sem espaços finais. */
-function draw(commits: Commit[]): string[] {
+function draw(commits: Commit[], options: {spaced?: boolean} = {}): string[] {
   const rows = layoutGraph(commits);
   const width = Math.max(...rows.map(r => r.width));
   return rows.flatMap(row => {
-    const {node, connector} = renderGraphLines(row, width);
+    const {node, connector} = renderGraphLines(row, width, options);
     return [cellsToText(node), ...(connector ? [cellsToText(connector)] : [])].map(s => s.trimEnd());
   });
 }
@@ -80,6 +80,43 @@ describe('renderGraphLines', () => {
       '├─╯',
       '●',
     ]);
+  });
+});
+
+describe('renderGraphLines with spaced lines', () => {
+  it('joins consecutive commits of a linear history with a │', () => {
+    expect(draw([c('a', 'b'), c('b', 'c'), c('c')], {spaced: true})).toEqual([
+      '●',
+      '│',
+      '●',
+      '│',
+      '●',
+    ]);
+  });
+
+  it('does not add a line after the last commit when no lane goes on', () => {
+    expect(draw([c('a', 'b'), c('b')], {spaced: true})).toEqual(['●', '│', '●']);
+    expect(draw([c('a')], {spaced: true})).toEqual(['●']);
+  });
+
+  it('keeps every lane going on the extra line', () => {
+    expect(draw([c('M', 'm', 'f'), c('m', 'base'), c('f', 'base'), c('base')], {spaced: true})).toEqual([
+      '●',
+      '├─╮',
+      '● │',
+      '│ │',
+      '│ ●',
+      '├─╯',
+      '●',
+    ]);
+  });
+
+  it('draws a │ after a commit whose parent is outside the list', () => {
+    expect(draw([c('a', 'outside')], {spaced: true})).toEqual(['●', '│']);
+  });
+
+  it('matches the dense drawing when no lane goes on and nothing moves', () => {
+    expect(draw([c('x'), c('y')], {spaced: true})).toEqual(draw([c('x'), c('y')]));
   });
 });
 

@@ -40,6 +40,7 @@ gitgraph [opções]
 | `-n`, `--max-count <n>` | Mostra no máximo `n` commits. Sem ela, a interface carrega 500 e busca mais conforme você desce, e a saída por pipe imprime tudo. |
 | `--no-color` | Desliga as cores (também vale a variável `NO_COLOR`). |
 | `--ascii` | Usa só caracteres ASCII no grafo e nos símbolos da interface. |
+| `--compact` | Uma linha por commit, sem a linha de ligação (`│`) entre eles. Por padrão, commits seguidos são ligados por um traço, o que ocupa mais linhas. |
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
 

@@ -43,13 +43,30 @@ function pathsOf(row: GraphRow): Path[] {
   return paths;
 }
 
-/** Precisa de linha de ligação quando alguma lane muda de coluna. */
-export function needsConnector(row: GraphRow): boolean {
-  return pathsOf(row).some(p => p.from !== p.to);
+export interface LineOptions {
+  /**
+   * Draw a connector line after every commit that has lanes going on, so
+   * consecutive commits are joined by a `│`. Without it, the connector line
+   * only exists when some lane changes column.
+   */
+  spaced?: boolean;
 }
 
-export function renderGraphLines(row: GraphRow, width: number): GraphLines {
-  return {node: renderNode(row, width), connector: renderConnector(row, width)};
+/** Whether the row needs a connector line below the commit line. */
+export function needsConnector(row: GraphRow, {spaced = false}: LineOptions = {}): boolean {
+  const paths = pathsOf(row);
+  return spaced ? paths.length > 0 : paths.some(p => p.from !== p.to);
+}
+
+export function renderGraphLines(
+  row: GraphRow,
+  width: number,
+  options: LineOptions = {},
+): GraphLines {
+  return {
+    node: renderNode(row, width),
+    connector: needsConnector(row, options) ? renderConnector(row, width) : null,
+  };
 }
 
 function renderNode(row: GraphRow, width: number): Cell[] {
@@ -96,9 +113,8 @@ function glyph({up, down, left, right}: Dirs): string {
  * `glyph` escolhe o caractere (`├`, `┬`, `┼`...). Lanes que só deslizam uma
  * coluna usam `╱`/`╲` no espaço entre as colunas, quando ele está livre.
  */
-function renderConnector(row: GraphRow, width: number): Cell[] | null {
+function renderConnector(row: GraphRow, width: number): Cell[] {
   const paths = pathsOf(row);
-  if (!paths.some(p => p.from !== p.to)) return null;
 
   const dirs: Dirs[] = Array.from({length: width}, () => ({
     up: false,

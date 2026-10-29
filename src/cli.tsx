@@ -47,7 +47,7 @@ async function main() {
       if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0);
       throw error;
     });
-    for (const line of formatPlain(rows, refs, {ascii: options.ascii})) console.log(line);
+    for (const line of formatPlain(rows, refs, {ascii: options.ascii, spaced: !options.compact})) console.log(line);
     return;
   }
 
@@ -55,7 +55,7 @@ async function main() {
   const initialLimit = options.maxCount ?? DEFAULT_LIMIT;
   const initial = await load(null, initialLimit);
   const {waitUntilExit} = render(
-    <DisplayContext.Provider value={{color: options.color, ascii: options.ascii}}>
+    <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact}}>
       <Browser
         initial={initial}
         initialLimit={initialLimit}

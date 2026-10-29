@@ -5,6 +5,8 @@ export interface CliOptions {
   maxCount: number | undefined;
   color: boolean;
   ascii: boolean;
+  /** One line per commit, without the connector line between them. */
+  compact: boolean;
   help: boolean;
   version: boolean;
 }
@@ -20,6 +22,7 @@ Opções:
   -n, --max-count <n>  mostra no máximo n commits (padrão: sem limite)
       --no-color       desliga as cores (também vale a variável NO_COLOR)
       --ascii          usa só caracteres ASCII no grafo
+      --compact        uma linha por commit, sem a linha de ligação entre eles
   -h, --help           mostra esta ajuda
   -v, --version        mostra a versão
 
@@ -37,6 +40,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         'max-count': {type: 'string', short: 'n'},
         'no-color': {type: 'boolean'},
         ascii: {type: 'boolean'},
+        compact: {type: 'boolean'},
         help: {type: 'boolean', short: 'h'},
         version: {type: 'boolean', short: 'v'},
       },
@@ -53,6 +57,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     maxCount: raw === undefined ? undefined : Number(raw),
     color: !values['no-color'] && !env['NO_COLOR'],
     ascii: values.ascii ?? false,
+    compact: values.compact ?? false,
     help: values.help ?? false,
     version: values.version ?? false,
   };

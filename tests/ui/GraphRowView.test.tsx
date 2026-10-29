@@ -38,7 +38,7 @@ describe('GraphRowView', () => {
   it('desenha o nó em ASCII quando pedido', () => {
     const [row] = layoutGraph([commit]);
     const {lastFrame} = render(
-      <DisplayContext.Provider value={{color: false, ascii: true}}>
+      <DisplayContext.Provider value={{color: false, ascii: true, spaced: true}}>
         <GraphRowView row={row!} graphWidth={1} refs={[]} head={{isHead: false, branch: null}} />
       </DisplayContext.Provider>,
     );

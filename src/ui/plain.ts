@@ -7,12 +7,12 @@ import {formatRefs} from './format.js';
 export function formatPlain(
   rows: GraphRow[],
   refs: RefInfo,
-  {ascii = false}: {ascii?: boolean} = {},
+  {ascii = false, spaced = false}: {ascii?: boolean; spaced?: boolean} = {},
 ): string[] {
   const fit = (cells: Cell[]) => (ascii ? toAscii(cells) : cells);
   const graphWidth = Math.max(1, ...rows.map(r => r.width));
   return rows.flatMap(row => {
-    const {node, connector} = renderGraphLines(row, row.width);
+    const {node, connector} = renderGraphLines(row, row.width, {spaced});
     const {commit} = row;
     const labels = formatRefs(refs.byCommit.get(commit.hash) ?? [], {
       isHead: refs.head.hash === commit.hash,

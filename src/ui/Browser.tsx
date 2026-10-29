@@ -32,7 +32,6 @@ const CHROME_LINES = 4;
 // Faltando tantos commits para o fim, busca mais histórico.
 const LOAD_AHEAD = 20;
 
-const rowHeight = (row: GraphRow) => (needsConnector(row) ? 2 : 1);
 
 export function Browser({initial, initialLimit, maxCommits, load}: Props) {
   const {exit} = useApp();
@@ -49,7 +48,11 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
   const request = useRef(0);
 
   const branches = useMemo(() => branchNames(initial.refs), [initial.refs]);
-  const heights = useMemo(() => data.rows.map(rowHeight), [data.rows]);
+  // A row takes two lines when it has a connector line below it.
+  const heights = useMemo(
+    () => data.rows.map(row => (needsConnector(row, {spaced: display.spaced}) ? 2 : 1)),
+    [data.rows, display.spaced],
+  );
   const graphWidth = useMemo(
     () => Math.max(1, ...data.rows.map(r => r.width)),
     [data.rows],

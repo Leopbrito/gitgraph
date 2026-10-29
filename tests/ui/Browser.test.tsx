@@ -170,7 +170,7 @@ describe('Browser', () => {
   it('usa só ASCII nos textos de interface com ascii: true', () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame} = render(
-      <DisplayContext.Provider value={{color: false, ascii: true}}>
+      <DisplayContext.Provider value={{color: false, ascii: true, spaced: true}}>
         <Browser initial={data(5)} initialLimit={100} load={load} />
       </DisplayContext.Provider>,
     );
@@ -179,5 +179,30 @@ describe('Browser', () => {
     expect(frame).toContain('gitgraph | todas as branches | 1/5');
     expect(frame).toContain('*');
     expect(frame).not.toMatch(/[●│─·↑↓]/);
+  });
+
+  it('shows fewer commits per screen when connector lines are drawn between them', () => {
+    const load = vi.fn<LoadGraph>();
+    const visibleCommits = (spaced: boolean) => {
+      const {lastFrame} = render(
+        <DisplayContext.Provider value={{color: false, ascii: false, spaced}}>
+          <Browser initial={data(60)} initialLimit={1000} load={load} />
+        </DisplayContext.Provider>,
+      );
+      return ((lastFrame() ?? '').match(/● [> ]h0/g) ?? []).length;
+    };
+    const dense = visibleCommits(false);
+    const spaced = visibleCommits(true);
+    expect(dense).toBeGreaterThan(spaced);
+    // Each commit takes two lines instead of one, so about half fit.
+    expect(spaced).toBeLessThanOrEqual(Math.ceil(dense / 2) + 1);
+  });
+
+  it('keeps the selected commit visible while scrolling with two-line rows', async () => {
+    const load = vi.fn<LoadGraph>();
+    const {lastFrame, stdin} = render(<Browser initial={data(60)} initialLimit={1000} load={load} />);
+    for (let i = 0; i < 30; i++) await press(stdin, 'j');
+    expect(lastFrame()).toContain('31/60');
+    expect(lastFrame()).toMatch(/● >h000030/);
   });
 });

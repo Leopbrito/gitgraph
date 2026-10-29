@@ -39,4 +39,15 @@ describe('formatPlain', () => {
     expect(lines.slice(0, 4).map(l => l.trim().split(' ')[0])).toEqual(['*', '+-+', '*', '/']);
     expect(lines.join('\n')).toMatch(/^[\x20-\x7e\n]*$/);
   });
+
+  it('joins consecutive commits with a | line when spaced', () => {
+    const rows = layoutGraph([c('1111111aaa', 'one', '2222222bbb'), c('2222222bbb', 'two')]);
+    const refs: RefInfo = {byCommit: new Map(), head: {hash: null, branch: null}};
+    expect(formatPlain(rows, refs, {ascii: true, spaced: true}).map(l => l.trimEnd().split(' ')[0])).toEqual([
+      '*',
+      '|',
+      '*',
+    ]);
+    expect(formatPlain(rows, refs, {ascii: true})).toHaveLength(2);
+  });
 });

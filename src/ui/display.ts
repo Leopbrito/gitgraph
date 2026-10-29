@@ -6,9 +6,11 @@ export interface Display {
   color: boolean;
   /** Só caracteres ASCII no grafo e nos textos de interface. */
   ascii: boolean;
+  /** Linha de ligação entre todos os commits (`│`); desligado, uma linha por commit. */
+  spaced: boolean;
 }
 
-export const DisplayContext = createContext<Display>({color: true, ascii: false});
+export const DisplayContext = createContext<Display>({color: true, ascii: false, spaced: true});
 
 export const useDisplay = (): Display => useContext(DisplayContext);
 

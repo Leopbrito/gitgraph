@@ -70,6 +70,8 @@ tests/
 
 A linha do commit mostra `●` e as lanes passantes (`│`) de `lanesBefore`. A **linha de ligação** existe só se alguma lane muda de coluna (`needsConnector`) e desenha, para cada trajeto (aresta do commit ou lane passante), sobe-anda-desce entre a coluna de origem e a de destino. As direções que se encontram numa célula se somam e viram o glifo (`├ ┤ ┬ ┴ ┼ ╭ ╮ ╰ ╯`). Lanes que só deslizam uma coluna usam `╱` (esquerda) ou `╲` (direita) no espaço entre as colunas, se ele estiver livre.
 
+Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** commit que ainda tem lanes seguindo, mesmo sem nenhuma lane mudar de coluna: ela só desenha o `│` que liga um commit ao próximo. Sem `spaced` (`--compact`), uma linha por commit e a linha de ligação só aparece quando alguma lane muda de coluna. A opção chega aos componentes pelo `DisplayContext` e à saída em texto por `formatPlain`; `Browser` usa `needsConnector(row, {spaced})` para calcular a altura de cada linha (1 ou 2), então a rolagem continua correta.
+
 ### Saída
 
 - **TTY:** `Browser` roda em tela alternativa (`alternateScreen` do Ink), então o scrollback do terminal não é afetado. O layout tem altura fixa: cabeçalho, lista, separador, detalhes (5 linhas) e rodapé, mais 1 linha de folga (se a saída ocupar todas as linhas, o Ink limpa a tela a cada render). Cada linha é truncada na largura do terminal.
@@ -88,5 +90,6 @@ A linha do commit mostra `●` e as lanes passantes (`│`) de `lanesBefore`. A 
 
 - **Argumentos:** `parseCliArgs` usa `util.parseArgs` (sem dependência). `-n/--max-count` é um teto rígido: na TUI vira o limite inicial e o máximo da carga sob demanda (`Browser.maxCommits`); sem ele a TUI começa em 500 e cresce, e o pipe imprime tudo.
 - **Cor:** `--no-color` ou `NO_COLOR` desligam só as cores (`tint()`), mas o Ink/chalk lê `--no-color` do `argv` e desliga todo estilo, inclusive o inverso. Por isso a linha selecionada também leva o marcador `>`.
+- **Linha de ligação:** `--compact` desliga `spaced` (`Display.spaced`). O padrão ligado deixa o grafo mais legível, mas cabem menos commits por tela e a saída em pipe tem mais linhas.
 - **ASCII:** `--ascii` troca os caracteres de desenho (`toAscii` em `glyphs.ts`), o separador e os símbolos dos textos. O `…` da truncagem é do Ink.
 - **Erros do git:** `exec.ts` roda o git com `LC_ALL=C` (o código reconhece mensagens como "does not have any commits" em qualquer idioma) e traduz "não é um repositório" e `ENOENT` (git ausente). `cli.tsx` sai com 2 em erro de uso e 1 nos demais; repositório sem commits não é erro.
