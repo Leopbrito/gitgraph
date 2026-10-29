@@ -27,4 +27,16 @@ describe('formatPlain', () => {
       '●    3333333 (feature) feature  Ana, 2026-03-04',
     ]);
   });
+
+  it('usa só ASCII com ascii: true', () => {
+    const rows = layoutGraph([
+      c('1111111aaa', 'merge', '2222222bbb', '3333333ccc'),
+      c('2222222bbb', 'main'),
+      c('3333333ccc', 'feature'),
+    ]);
+    const refs: RefInfo = {byCommit: new Map(), head: {hash: null, branch: null}};
+    const lines = formatPlain(rows, refs, {ascii: true});
+    expect(lines.slice(0, 4).map(l => l.trim().split(' ')[0])).toEqual(['*', '+-+', '*', '/']);
+    expect(lines.join('\n')).toMatch(/^[\x20-\x7e\n]*$/);
+  });
 });

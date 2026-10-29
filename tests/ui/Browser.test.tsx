@@ -5,6 +5,7 @@ import type {RefInfo} from '../../src/git/refs.js';
 import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {Browser, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
+import {DisplayContext} from '../../src/ui/display.js';
 
 const commit = (n: number, parents: string[]): Commit => ({
   hash: `h${String(n).padStart(6, '0')}`,
@@ -131,5 +132,52 @@ describe('Browser', () => {
     const {lastFrame} = render(<Browser initial={empty} initialLimit={100} load={load} />);
     expect(lastFrame()).toContain('Nenhum commit');
     expect(lastFrame()).toContain('0/0');
+  });
+
+  it('marca a linha selecionada com > mesmo sem estilos', async () => {
+    const load = vi.fn<LoadGraph>();
+    const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
+    const marked = () => (lastFrame() ?? '').split('\n').filter(l => /● >h0000/.test(l) || / >h0000/.test(l));
+    expect(lastFrame()).toMatch(/● >h000000/);
+    await press(stdin, 'j');
+    expect(lastFrame()).toMatch(/● >h000001/);
+    expect(lastFrame()).not.toMatch(/● >h000000/);
+    expect(marked().length).toBe(1);
+  });
+
+  it('respeita o teto de commits (--max-count) e não busca além dele', async () => {
+    const load = vi.fn<LoadGraph>().mockResolvedValue(data(40));
+    const {lastFrame, stdin} = render(
+      <Browser initial={data(30)} initialLimit={30} maxCommits={40} load={load} />,
+    );
+    await press(stdin, 'G');
+    await tick();
+    // 30 -> min(60, 40) = 40; ao atingir o teto, não pede mais.
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(null, 40);
+    await press(stdin, 'G', 'k', 'G');
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(lastFrame()).not.toContain('/40+');
+  });
+
+  it('não busca nada quando o teto já foi atingido de início', async () => {
+    const load = vi.fn<LoadGraph>();
+    const {stdin} = render(<Browser initial={data(30)} initialLimit={30} maxCommits={30} load={load} />);
+    await press(stdin, 'G');
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('usa só ASCII nos textos de interface com ascii: true', () => {
+    const load = vi.fn<LoadGraph>();
+    const {lastFrame} = render(
+      <DisplayContext.Provider value={{color: false, ascii: true}}>
+        <Browser initial={data(5)} initialLimit={100} load={load} />
+      </DisplayContext.Provider>,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('Up/Down');
+    expect(frame).toContain('gitgraph | todas as branches | 1/5');
+    expect(frame).toContain('*');
+    expect(frame).not.toMatch(/[●│─·↑↓]/);
   });
 });

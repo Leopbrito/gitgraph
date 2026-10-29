@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {cellsToText, renderGraphLines} from '../../src/graph/glyphs.js';
+import {cellsToText, renderGraphLines, toAscii} from '../../src/graph/glyphs.js';
 import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 
@@ -80,5 +80,35 @@ describe('renderGraphLines', () => {
       '├─╯',
       '●',
     ]);
+  });
+});
+
+describe('toAscii', () => {
+  it('troca desenho de caixa por ASCII e mantém a cor', () => {
+    const cells = [
+      {char: '●', color: 3},
+      {char: '├', color: 1},
+      {char: '─', color: 1},
+      {char: '╮', color: 1},
+      {char: '╱', color: 2},
+      {char: '╲', color: 2},
+      {char: '│', color: 0},
+      {char: 'x', color: 0},
+    ];
+    const ascii = toAscii(cells);
+    expect(ascii.map(c => c.char).join('')).toBe('*+-+/\\|x');
+    expect(ascii.map(c => c.color)).toEqual(cells.map(c => c.color));
+  });
+
+  it('não sobra nenhum caractere fora do ASCII nos desenhos de grafo', () => {
+    const rows = layoutGraph([
+      c('T0', 'a'), c('T1', 'M'), c('T2', 'c'), c('M', 'm0', 'f0'), c('m0'), c('f0'), c('a'), c('c'),
+    ]);
+    const width = Math.max(...rows.map(r => r.width));
+    for (const row of rows) {
+      const {node, connector} = renderGraphLines(row, width);
+      const text = cellsToText(toAscii(node)) + cellsToText(toAscii(connector ?? []));
+      expect(text).toMatch(/^[\x20-\x7e]*$/);
+    }
   });
 });

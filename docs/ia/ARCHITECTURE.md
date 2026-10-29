@@ -28,9 +28,10 @@ repositório git ──▶ leitura dos dados ──▶ montagem do grafo ──�
 
 ```
 src/
-  cli.tsx          # entrada: carrega dados e escolhe Browser (TTY) ou texto puro (pipe)
+  cli.tsx          # entrada: argumentos, carga dos dados e escolha entre Browser (TTY) e texto puro (pipe)
+  args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
-    exec.ts        # executa `git` (execFile) e rejeita com o stderr
+    exec.ts        # executa `git` (execFile, LC_ALL=C) e traduz os erros comuns
     log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
@@ -40,13 +41,14 @@ src/
     glyphs.ts      # GraphRow -> células de caracteres (nó e linha de ligação), puro
   ui/
     Browser.tsx    # TUI: seleção, rolagem, filtro por branch e carga sob demanda
+    display.ts     # DisplayContext (cor/ASCII), tint() e separator()
     GraphRowView.tsx # uma linha do grafo em Ink (cores por lane, truncada, destaque)
     CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas)
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2 (puro)
     picker.ts      # lista e filtro de branches (puro)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
-    plain.ts       # formatPlain(): mesma saída em texto puro, para pipes
+    plain.ts       # formatPlain(): mesma saída em texto puro, para pipes (aceita ascii)
 tests/
   graph/           # layout e glyphs com commits sintéticos (sem git)
   ui/              # viewport/picker/format/plain puros; Browser e GraphRowView via ink-testing-library
@@ -81,3 +83,10 @@ A linha do commit mostra `●` e as lanes passantes (`│`) de `lanesBefore`. A 
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.
 - Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo do `--topo-order` não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
 - `Browser` recebe `load(rev, limit)` por parâmetro, o que isola o git da UI e permite testar com dados falsos. As refs são lidas uma vez por sessão.
+
+### Opções e erros
+
+- **Argumentos:** `parseCliArgs` usa `util.parseArgs` (sem dependência). `-n/--max-count` é um teto rígido: na TUI vira o limite inicial e o máximo da carga sob demanda (`Browser.maxCommits`); sem ele a TUI começa em 500 e cresce, e o pipe imprime tudo.
+- **Cor:** `--no-color` ou `NO_COLOR` desligam só as cores (`tint()`), mas o Ink/chalk lê `--no-color` do `argv` e desliga todo estilo, inclusive o inverso. Por isso a linha selecionada também leva o marcador `>`.
+- **ASCII:** `--ascii` troca os caracteres de desenho (`toAscii` em `glyphs.ts`), o separador e os símbolos dos textos. O `…` da truncagem é do Ink.
+- **Erros do git:** `exec.ts` roda o git com `LC_ALL=C` (o código reconhece mensagens como "does not have any commits" em qualquer idioma) e traduz "não é um repositório" e `ENOENT` (git ausente). `cli.tsx` sai com 2 em erro de uso e 1 nos demais; repositório sem commits não é erro.

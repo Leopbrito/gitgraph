@@ -141,6 +141,28 @@ function renderConnector(row: GraphRow, width: number): Cell[] | null {
   return cells;
 }
 
+const ASCII: Record<string, string> = {
+  '●': '*',
+  '│': '|',
+  '─': '-',
+  '╱': '/',
+  '╲': '\\',
+  '╭': '+',
+  '╮': '+',
+  '╰': '+',
+  '╯': '+',
+  '├': '+',
+  '┤': '+',
+  '┬': '+',
+  '┴': '+',
+  '┼': '+',
+};
+
+/** Troca os caracteres de desenho de caixa por equivalentes ASCII. */
+export function toAscii(cells: Cell[]): Cell[] {
+  return cells.map(cell => ({...cell, char: ASCII[cell.char] ?? cell.char}));
+}
+
 /** Texto puro das células, para testes e saída sem cor. */
 export function cellsToText(cells: Cell[], padTo = 0): string {
   const text = cells.map(c => c.char).join('');

@@ -13,7 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "ink": "^8.0.0",

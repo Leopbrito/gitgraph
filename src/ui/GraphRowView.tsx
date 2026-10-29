@@ -1,11 +1,17 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import {CELLS_PER_COLUMN, renderGraphLines, type Cell} from '../graph/glyphs.js';
+import {
+  CELLS_PER_COLUMN,
+  renderGraphLines,
+  toAscii,
+  type Cell,
+} from '../graph/glyphs.js';
 import type {GraphRow, Ref} from '../graph/types.js';
+import {tint, useDisplay} from './display.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
 const PALETTE = ['cyan', 'magenta', 'yellow', 'green', 'blue', 'red'] as const;
-export const laneColor = (column: number) => PALETTE[column % PALETTE.length];
+export const laneColor = (color: number) => PALETTE[color % PALETTE.length];
 
 interface Props {
   row: GraphRow;
@@ -20,17 +26,19 @@ interface Props {
 // Cada linha é um único <Text> truncado na largura do terminal: o grafo não
 // desalinha e commits longos não quebram em várias linhas.
 export function GraphRowView({row, graphWidth, refs, head, selected = false}: Props) {
-  const {node, connector} = renderGraphLines(row, row.width);
+  const display = useDisplay();
+  const lines = renderGraphLines(row, row.width);
   const {commit} = row;
   return (
     <Box flexDirection="column">
       <Text wrap="truncate-end">
-        <GraphCells cells={node} graphWidth={graphWidth} />
-        <Text> </Text>
+        <GraphCells cells={lines.node} graphWidth={graphWidth} />
+        {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso). */}
+        <Text>{selected ? '>' : ' '}</Text>
         <Text inverse={selected}>
           <Text dimColor>{commit.hash.slice(0, 7)} </Text>
           {formatRefs(refs, head).map(label => (
-            <Text key={label.text} color={label.color} bold>
+            <Text key={label.text} color={tint(display, label.color)} bold>
               {`(${label.text}) `}
             </Text>
           ))}
@@ -38,9 +46,9 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false}: Pr
           <Text dimColor>{`  ${commit.author}, ${commit.date.slice(0, 10)}`}</Text>
         </Text>
       </Text>
-      {connector && (
+      {lines.connector && (
         <Text wrap="truncate-end">
-          <GraphCells cells={connector} graphWidth={graphWidth} />
+          <GraphCells cells={lines.connector} graphWidth={graphWidth} />
         </Text>
       )}
     </Box>
@@ -48,11 +56,13 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false}: Pr
 }
 
 function GraphCells({cells, graphWidth}: {cells: Cell[]; graphWidth: number}) {
-  const pad = Math.max(0, graphWidth * CELLS_PER_COLUMN - cells.length);
+  const display = useDisplay();
+  const shown = display.ascii ? toAscii(cells) : cells;
+  const pad = Math.max(0, graphWidth * CELLS_PER_COLUMN - shown.length);
   return (
     <>
-      {cells.map((cell, i) => (
-        <Text key={i} color={laneColor(cell.color)}>
+      {shown.map((cell, i) => (
+        <Text key={i} color={tint(display, laneColor(cell.color))}>
           {cell.char}
         </Text>
       ))}

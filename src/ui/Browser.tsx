@@ -5,6 +5,7 @@ import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
+import {separator, tint, useDisplay} from './display.js';
 import {GraphRowView} from './GraphRowView.js';
 import {branchNames, pickerOptions} from './picker.js';
 import {clamp, scrollIntoView, visibleEnd} from './viewport.js';
@@ -20,6 +21,8 @@ export type LoadGraph = (rev: string | null, limit: number) => Promise<GraphData
 interface Props {
   initial: GraphData;
   initialLimit: number;
+  /** Teto de commits (--max-count): sem ele, a lista cresce sob demanda. */
+  maxCommits?: number;
   load: LoadGraph;
 }
 
@@ -31,8 +34,10 @@ const LOAD_AHEAD = 20;
 
 const rowHeight = (row: GraphRow) => (needsConnector(row) ? 2 : 1);
 
-export function Browser({initial, initialLimit, load}: Props) {
+export function Browser({initial, initialLimit, maxCommits, load}: Props) {
   const {exit} = useApp();
+  const display = useDisplay();
+  const dot = separator(display);
   const {columns, rows: terminalRows} = useWindowSize();
   const [data, setData] = useState(initial);
   const [rev, setRev] = useState<string | null>(null);
@@ -78,14 +83,15 @@ export function Browser({initial, initialLimit, load}: Props) {
   );
 
   // Perto do fim com a lista cheia: provavelmente há mais histórico.
+  const canGrow = maxCommits === undefined || limit < maxCommits;
   useEffect(() => {
     if (loading || error) return;
-    if (total >= limit && cursor.selected >= total - LOAD_AHEAD) {
-      const next = limit * 2;
+    if (canGrow && total >= limit && cursor.selected >= total - LOAD_AHEAD) {
+      const next = Math.min(limit * 2, maxCommits ?? Infinity);
       setLimit(next);
       reload(rev, next, false);
     }
-  }, [loading, error, total, limit, cursor.selected, rev, reload]);
+  }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, rev, reload]);
 
   const select = (index: number) =>
     setCursor({
@@ -135,14 +141,15 @@ export function Browser({initial, initialLimit, load}: Props) {
     isHead: data.refs.head.hash === hash,
     branch: data.refs.head.branch,
   });
-  const more = total >= limit;
+  const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const more = canGrow && total >= limit;
 
   return (
     <Box flexDirection="column" height={terminalRows - 1}>
       <Text wrap="truncate-end">
         <Text bold>gitgraph</Text>
         <Text dimColor>
-          {` · ${rev ?? 'todas as branches'} · ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ' · carregando…' : ''}`}
+          {` ${dot} ${rev ?? 'todas as branches'} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
         </Text>
       </Text>
       <Box flexDirection="column" height={listHeight} overflow="hidden">
@@ -157,7 +164,7 @@ export function Browser({initial, initialLimit, load}: Props) {
           />
         ))}
       </Box>
-      <Text dimColor>{'─'.repeat(columns)}</Text>
+      <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>
       {picker ? (
         <BranchPicker
           query={picker.query}
@@ -171,12 +178,12 @@ export function Browser({initial, initialLimit, load}: Props) {
           head={commit ? headOf(commit.hash) : {isHead: false, branch: null}}
         />
       )}
-      <Text wrap="truncate-end" color={error ? 'red' : undefined} dimColor={!error}>
+      <Text wrap="truncate-end" color={error ? tint(display, 'red') : undefined} dimColor={!error}>
         {error
           ? `erro: ${error}`
           : picker
-            ? 'digite para filtrar · ↑/↓ escolher · Enter aplicar · Esc cancelar'
-            : 'j/k ↑/↓ mover · PgUp/PgDn página · g/G início/fim · / filtrar branch · q sair'}
+            ? `digite para filtrar ${dot} ${arrows} escolher ${dot} Enter aplicar ${dot} Esc cancelar`
+            : `j/k ${arrows} mover ${dot} PgUp/PgDn página ${dot} g/G início/fim ${dot} / filtrar branch ${dot} q sair`}
       </Text>
     </Box>
   );

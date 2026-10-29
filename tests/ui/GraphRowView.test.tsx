@@ -2,6 +2,7 @@ import React from 'react';
 import {render} from 'ink-testing-library';
 import {describe, expect, it} from 'vitest';
 import {layoutGraph} from '../../src/graph/layout.js';
+import {DisplayContext} from '../../src/ui/display.js';
 import {GraphRowView} from '../../src/ui/GraphRowView.js';
 
 const commit = {
@@ -32,5 +33,16 @@ describe('GraphRowView', () => {
     expect(frame).toContain('(tag: v1)');
     expect(frame).toContain('primeiro commit');
     expect(frame).toContain('Ana, 2026-03-04');
+  });
+
+  it('desenha o nó em ASCII quando pedido', () => {
+    const [row] = layoutGraph([commit]);
+    const {lastFrame} = render(
+      <DisplayContext.Provider value={{color: false, ascii: true}}>
+        <GraphRowView row={row!} graphWidth={1} refs={[]} head={{isHead: false, branch: null}} />
+      </DisplayContext.Provider>,
+    );
+    expect(lastFrame()).toContain('*');
+    expect(lastFrame()).not.toContain('●');
   });
 });

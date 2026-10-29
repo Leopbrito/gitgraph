@@ -98,4 +98,12 @@ describe('repositório com branch e merge', () => {
     const commits = await loadCommits(dir, {all: true});
     expect(commits.map(c => c.subject)).toEqual(['com arquivo']);
   });
+
+  it('preserva acentos no assunto, no corpo e no autor', async () => {
+    const {dir, run} = repo();
+    run('commit', '--allow-empty', '-q', '-m', 'Corrige ação inválida', '-m', 'Descrição: não quebra');
+    const [commit] = await loadCommits(dir);
+    expect(commit?.subject).toBe('Corrige ação inválida');
+    expect(commit?.body).toBe('Descrição: não quebra');
+  });
 });
