@@ -82,3 +82,7 @@ npm run build      # gera dist/
 ```
 
 A arquitetura e as convenções estão em [`docs/ia/`](docs/ia/ARCHITECTURE.md).
+
+## Licença
+
+[MIT](LICENSE)

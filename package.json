@@ -2,6 +2,7 @@
   "name": "gitgraph",
   "version": "0.0.0",
   "description": "CLI que mostra o grafo de branches de um repositório git no terminal",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "gitgraph": "dist/cli.js"
