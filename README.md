@@ -17,7 +17,7 @@ Num terminal, a interface é interativa; com a saída redirecionada, imprime tex
 ## Requisitos
 
 - Node.js 22 ou superior (exigência do Ink).
-- `git` no `PATH`.
+- `git` 2.23 ou superior no `PATH` (o checkout usa `git switch`).
 
 ## Instalação
 
@@ -52,11 +52,16 @@ Mostra todas as branches locais e remotas e as tags (o stash fica de fora).
 | --- | --- |
 | `j` / `↓`, `k` / `↑` | Move a seleção |
 | `PgDn`, `PgUp` | Anda uma página |
+| `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
 | `g` / `Home`, `G` / `End` | Vai ao início, ao fim |
 | `/` | Filtra por branch: digite para buscar, `↑`/`↓` escolhem, `Enter` aplica, `Esc` cancela |
 | `q` | Sai |
 
 O painel abaixo da lista mostra os detalhes do commit selecionado.
+
+Quando a branch local está desatualizada em relação à remota, a lista do `c` traz três opções: `x e pull de origin/x` (já selecionada), `x (sem pull)` e HEAD destacado no commit. O pull é `git pull --ff-only <remota> <branch>`: só avança por fast-forward e nunca cria merge nem rebase. Se as branches divergiram, ou há alterações locais que seriam sobrescritas, o git recusa; como a troca de branch já aconteceu, a mensagem diz "checkout feito para x, mas o pull falhou: ...". O pull fala com a rede sem prompts de terminal: as credenciais precisam estar disponíveis sem interação (ssh-agent, credential helper) e há um limite de 2 minutos.
+
+O checkout nunca usa `--force`: se houver alterações locais que seriam sobrescritas (ou a branch estiver em uso em outro worktree), o git recusa, nada muda e a mensagem aparece no rodapé.
 
 ### Saída por pipe
 

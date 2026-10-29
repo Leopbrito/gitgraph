@@ -56,3 +56,12 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
     .catch(() => null);
   return {byCommit, head: {hash, branch}};
 }
+
+/** Tip commit of each local branch, from the refs grouped by commit. */
+export function localBranchTips(byCommit: Map<string, Ref[]>): Map<string, string> {
+  const tips = new Map<string, string>();
+  for (const [hash, refs] of byCommit) {
+    for (const ref of refs) if (ref.kind === 'branch') tips.set(ref.name, hash);
+  }
+  return tips;
+}

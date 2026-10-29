@@ -1,9 +1,17 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useApp, useInput, useWindowSize} from 'ink';
-import type {RefInfo} from '../git/refs.js';
+import {
+  checkoutTargets,
+  describeTarget,
+  isCurrent,
+  PartialCheckoutError,
+  type CheckoutTarget,
+} from '../git/checkout.js';
+import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
+import {CheckoutPrompt} from './CheckoutPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {separator, tint, useDisplay} from './display.js';
 import {GraphRowView} from './GraphRowView.js';
@@ -24,6 +32,8 @@ interface Props {
   /** Teto de commits (--max-count): sem ele, a lista cresce sob demanda. */
   maxCommits?: number;
   load: LoadGraph;
+  /** Switches the repository to the target; rejects with git's message on failure. */
+  checkout: (target: CheckoutTarget) => Promise<void>;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -32,8 +42,11 @@ const CHROME_LINES = 4;
 // Faltando tantos commits para o fim, busca mais histórico.
 const LOAD_AHEAD = 20;
 
+// Git errors span several lines; the footer has one.
+const oneLine = (message: string) =>
+  message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, maxCommits, load}: Props) {
+export function Browser({initial, initialLimit, maxCommits, load, checkout}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -45,9 +58,12 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
   const [picker, setPicker] = useState<{query: string; index: number} | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState<{targets: CheckoutTarget[]; index: number} | null>(null);
   const request = useRef(0);
 
-  const branches = useMemo(() => branchNames(initial.refs), [initial.refs]);
+  const branches = useMemo(() => branchNames(data.refs), [data.refs]);
+  const tips = useMemo(() => localBranchTips(data.refs.byCommit), [data.refs]);
   // A row takes two lines when it has a connector line below it.
   const heights = useMemo(
     () => data.rows.map(row => (needsConnector(row, {spaced: display.spaced}) ? 2 : 1)),
@@ -102,7 +118,50 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
       offset,
     });
 
+  const commit = data.rows[cursor.selected]?.commit;
+  const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? [];
+
+  const runCheckout = (target: CheckoutTarget) => {
+    setPrompt(null);
+    if (isCurrent(target, data.refs.head)) {
+      setNotice(`já está em ${describeTarget(target)}`);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    checkout(target)
+      .then(() => {
+        setNotice(`agora em ${describeTarget(target)}`);
+        // Refreshes refs so the HEAD marker moves; the cursor stays where it is.
+        reload(rev, limit, false);
+      })
+      .catch(e => {
+        const message = oneLine(e instanceof Error ? e.message : String(e));
+        // The switch happened and only the pull failed: refresh so HEAD is right.
+        if (e instanceof PartialCheckoutError) reload(rev, limit, false);
+        else setLoading(false);
+        // After reload(), which clears the error when it starts.
+        setError(message);
+      });
+  };
+
   useInput((input, key) => {
+    if (prompt) {
+      const single = prompt.targets.length === 1;
+      const last = prompt.targets.length - 1;
+      if (key.escape || (single && input === 'n')) {
+        setPrompt(null);
+      } else if (key.return || (single && input === 'y')) {
+        const target = prompt.targets[prompt.index];
+        if (target) runCheckout(target);
+      } else if (key.upArrow) {
+        setPrompt({...prompt, index: clamp(prompt.index - 1, 0, last)});
+      } else if (key.downArrow) {
+        setPrompt({...prompt, index: clamp(prompt.index + 1, 0, last)});
+      }
+      return;
+    }
+
     if (picker) {
       const options = pickerOptions(branches, picker.query);
       if (key.escape) {
@@ -127,6 +186,7 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
       return;
     }
 
+    if (notice) setNotice(null);
     if (input === 'q') exit();
     else if (key.downArrow || input === 'j') select(cursor.selected + 1);
     else if (key.upArrow || input === 'k') select(cursor.selected - 1);
@@ -135,11 +195,21 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if (input === '/') setPicker({query: '', index: 0});
+    else if (input === 'c' && commit && !loading) {
+      const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
+      const only = targets.length === 1 ? targets[0] : undefined;
+      if (only && isCurrent(only, data.refs.head)) {
+        setNotice(`já está em ${describeTarget(only)}`);
+      } else {
+        setError(null);
+        // With several branches, start on the first one that is not the current.
+        const index = Math.max(0, targets.findIndex(t => !isCurrent(t, data.refs.head)));
+        setPrompt({targets, index});
+      }
+    }
     else if (key.escape) setError(null);
   });
 
-  const commit = data.rows[cursor.selected]?.commit;
-  const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? [];
   const headOf = (hash: string) => ({
     isHead: data.refs.head.hash === hash,
     branch: data.refs.head.branch,
@@ -168,7 +238,9 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
         ))}
       </Box>
       <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>
-      {picker ? (
+      {prompt ? (
+        <CheckoutPrompt targets={prompt.targets} index={prompt.index} head={data.refs.head} />
+      ) : picker ? (
         <BranchPicker
           query={picker.query}
           options={pickerOptions(branches, picker.query)}
@@ -184,9 +256,14 @@ export function Browser({initial, initialLimit, maxCommits, load}: Props) {
       <Text wrap="truncate-end" color={error ? tint(display, 'red') : undefined} dimColor={!error}>
         {error
           ? `erro: ${error}`
-          : picker
-            ? `digite para filtrar ${dot} ${arrows} escolher ${dot} Enter aplicar ${dot} Esc cancelar`
-            : `j/k ${arrows} mover ${dot} PgUp/PgDn página ${dot} g/G início/fim ${dot} / filtrar branch ${dot} q sair`}
+          : prompt
+            ? prompt.targets.length === 1
+              ? `Enter/y confirma ${dot} Esc/n cancela`
+              : `${arrows} escolher ${dot} Enter confirma ${dot} Esc cancela`
+            : picker
+              ? `digite para filtrar ${dot} ${arrows} escolher ${dot} Enter aplicar ${dot} Esc cancelar`
+              : (notice ??
+                `j/k ${arrows} mover ${dot} PgUp/PgDn ${dot} g/G início/fim ${dot} c checkout ${dot} / branch ${dot} q sair`)}
       </Text>
     </Box>
   );

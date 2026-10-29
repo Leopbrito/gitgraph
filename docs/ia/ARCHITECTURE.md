@@ -31,10 +31,11 @@ src/
   cli.tsx          # entrada: argumentos, carga dos dados e escolha entre Browser (TTY) e texto puro (pipe)
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
-    exec.ts        # executa `git` (execFile, LC_ALL=C) e traduz os erros comuns
+    exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
     log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
+    checkout.ts    # checkoutTargets()/isCurrent()/describeTarget()/describeOption() (puros) e checkout() via `git switch` (+ `pull --ff-only`)
   graph/
     types.ts       # Commit, Ref, Edge, GraphRow
     layout.ts      # layoutGraph(): Commit[] -> GraphRow[] (puro, sem UI)
@@ -45,6 +46,7 @@ src/
     GraphRowView.tsx # uma linha do grafo em Ink (cores por lane, truncada, destaque)
     CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas)
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
+    CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2 (puro)
     picker.ts      # lista e filtro de branches (puro)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
@@ -80,11 +82,14 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 
 ### Interação (TTY)
 
-- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `q` sai.
+- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `c` faz checkout; `q` sai.
 - `/` abre o seletor de branch (locais e remotas): digitar filtra, `↑`/`↓` escolhem, `Enter` aplica, `Esc` cancela. Aplicar recarrega com `git log <branch>` (a opção "todas" volta ao `--all`).
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.
 - Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo do `--topo-order` não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
-- `Browser` recebe `load(rev, limit)` por parâmetro, o que isola o git da UI e permite testar com dados falsos. As refs são lidas uma vez por sessão.
+- `Browser` recebe `load(rev, limit)` por parâmetro, o que isola o git da UI e permite testar com dados falsos. As refs são relidas a cada `load` (são baratas), porque um checkout move o HEAD.
+- **Checkout (`c`):** `checkoutTargets` escolhe o destino do commit selecionado: as branches locais cuja ponta ele é (ordenadas) ou, se não houver, HEAD destacado (`git switch --detach <hash>`); pontas só remotas caem em HEAD destacado. Sempre pede confirmação (`CheckoutPrompt`; com várias branches é uma lista). Se o HEAD já está no destino, só avisa no rodapé. Nunca usa `--force`: o git recusa quando alterações locais seriam sobrescritas, e a mensagem vira o erro de uma linha no rodapé.
+- **Branch local atrás da remota:** se o commit é a ponta de `origin/x` e a branch local `x` (`localBranchTips` em `refs.ts`) está em outro commit, `checkoutTargets` devolve `[pull x, branches realmente no commit, x sem pull, HEAD destacado]` e o prompt é uma lista com a primeira opção selecionada. O nome da branch local é o que sobra depois da remota, tentando cada `/` (aguenta `origin/feature/x`). `checkout` de um alvo `pull` faz `git switch x` e depois `git pull --ff-only <remota> x`. Se o pull falha, lança `PartialCheckoutError` (a troca já aconteceu): o `Browser` recarrega para o HEAD refletir isso e mantém a mensagem, filtrada por `summarizeGitError` (tira o resumo do fetch e as `hint:`). O pull usa `git(..., {network: true})`: `GIT_TERMINAL_PROMPT=0`, processo sem terminal de controle (`detached`, para o ssh não pedir senha na TUI) e limite de 2 minutos.
+- Depois do sucesso do checkout, `Browser` chama `reload` (cursor mantido) para o marcador HEAD acompanhar. `Browser` recebe `checkout(target)` por parâmetro, como `load`.
 
 ### Opções e erros
 

@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import React from 'react';
 import {render} from 'ink';
 import {HELP, parseCliArgs, UsageError} from './args.js';
+import {checkout} from './git/checkout.js';
 import {loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {layoutGraph} from './graph/layout.js';
@@ -26,18 +27,18 @@ async function main() {
   }
 
   const cwd = process.cwd();
-  const refs = await loadRefs(cwd);
+  // Refs are read on every load: after a checkout, HEAD has moved.
   const graph = async (rev: string | null, maxCount: number | undefined) => {
-    const commits = await loadCommits(
-      cwd,
-      rev === null ? {all: true, maxCount} : {revs: [rev], maxCount},
-    );
+    const [commits, refs] = await Promise.all([
+      loadCommits(cwd, rev === null ? {all: true, maxCount} : {revs: [rev], maxCount}),
+      loadRefs(cwd),
+    ]);
     return {rows: layoutGraph(commits), refs};
   };
 
   // Sem TTY (pipe/redirecionamento) a saída é texto puro e completa, como o `git log`.
   if (!process.stdout.isTTY) {
-    const {rows} = await graph(null, options.maxCount);
+    const {rows, refs} = await graph(null, options.maxCount);
     if (rows.length === 0) {
       console.error('gitgraph: o repositório não tem commits');
       return;
@@ -61,6 +62,7 @@ async function main() {
         initialLimit={initialLimit}
         maxCommits={options.maxCount}
         load={load}
+        checkout={target => checkout(cwd, target)}
       />
     </DisplayContext.Provider>,
     {alternateScreen: true},

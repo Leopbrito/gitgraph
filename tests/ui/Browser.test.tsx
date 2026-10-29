@@ -4,8 +4,18 @@ import {describe, expect, it, vi} from 'vitest';
 import type {RefInfo} from '../../src/git/refs.js';
 import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
-import {Browser, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
+import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
+import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
 import {DisplayContext} from '../../src/ui/display.js';
+
+const noCheckout = () => Promise.resolve();
+
+/** The real Browser with a harmless default `checkout`, so older tests need not pass one. */
+function Browser(props: Omit<React.ComponentProps<typeof BrowserView>, 'checkout'> & {
+  checkout?: (target: CheckoutTarget) => Promise<void>;
+}) {
+  return <BrowserView checkout={noCheckout} {...props} />;
+}
 
 const commit = (n: number, parents: string[]): Commit => ({
   hash: `h${String(n).padStart(6, '0')}`,
@@ -204,5 +214,214 @@ describe('Browser', () => {
     for (let i = 0; i < 30; i++) await press(stdin, 'j');
     expect(lastFrame()).toContain('31/60');
     expect(lastFrame()).toMatch(/● >h000030/);
+  });
+
+  describe('checkout', () => {
+    const switched = (branch: string, hash: string): GraphData => ({
+      rows: data(5).rows,
+      refs: {...refs, head: {hash, branch}},
+    });
+
+    it('asks for confirmation and switches to the branch at the commit with Enter', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+      const load = vi.fn<LoadGraph>().mockResolvedValue(switched('feature', 'h000002'));
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'j', 'c');
+      expect(lastFrame()).toContain('Checkout para feature?');
+      expect(lastFrame()).toContain('Enter/y confirma');
+      expect(checkout).not.toHaveBeenCalled();
+
+      await press(stdin, '\r');
+      await tick();
+      expect(checkout).toHaveBeenCalledWith({kind: 'branch', name: 'feature'});
+      // Refs are reloaded, so the HEAD marker moves and a notice is shown.
+      expect(load).toHaveBeenCalledWith(null, 100);
+      expect(lastFrame()).toContain('HEAD -> feature');
+      expect(lastFrame()).toContain('agora em feature');
+      expect(lastFrame()).not.toContain('Checkout para');
+    });
+
+    it('also confirms with y', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
+      const {stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'j', 'c', 'y');
+      await tick();
+      expect(checkout).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([['\u001b'], ['n']])('cancels with %j without touching git', async key => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>();
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={vi.fn()} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'c');
+      expect(lastFrame()).toContain('Checkout para');
+      await press(stdin, key);
+      await tick();
+      expect(lastFrame()).not.toContain('Checkout para');
+      expect(checkout).not.toHaveBeenCalled();
+    });
+
+    it('detaches HEAD at a commit that has no local branch', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'c');
+      expect(lastFrame()).toContain('h000001 (HEAD destacado)');
+      expect(lastFrame()).toContain('HEAD ficará destacado');
+      await press(stdin, '\r');
+      await tick();
+      expect(checkout).toHaveBeenCalledWith({kind: 'detach', hash: 'h000001'});
+    });
+
+    it('lets you pick among several branches at the same commit', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
+      const many: GraphData = {
+        rows: data(5).rows,
+        refs: {
+          byCommit: new Map([
+            ['h000000', [{name: 'main', kind: 'branch'}]],
+            ['h000001', [{name: 'beta', kind: 'branch'}, {name: 'alpha', kind: 'branch'}]],
+          ]),
+          head: {hash: 'h000000', branch: 'main'},
+        },
+      };
+      const {lastFrame, stdin} = render(
+        <Browser initial={many} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'c');
+      const lines = (lastFrame() ?? '').split('\n');
+      expect(lines.some(l => l.includes('Checkout para qual branch?'))).toBe(true);
+      // The list is sorted and starts on the first branch: "> alpha", then "beta".
+      const selected = lines.findIndex(l => l.includes('> alpha'));
+      expect(selected).toBeGreaterThan(-1);
+      expect(lines[selected + 1]).toContain('beta');
+      await press(stdin, '\u001b[B', '\r');
+      await tick();
+      expect(checkout).toHaveBeenCalledWith({kind: 'branch', name: 'beta'});
+    });
+
+    it('says so, without asking, when HEAD is already there', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>();
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={vi.fn()} checkout={checkout} />,
+      );
+      await press(stdin, 'c');
+      expect(lastFrame()).toContain('já está em main');
+      expect(lastFrame()).not.toContain('Checkout para');
+      expect(checkout).not.toHaveBeenCalled();
+    });
+
+    it('shows git failures on one line and changes nothing', async () => {
+      const checkout = vi
+        .fn<(t: CheckoutTarget) => Promise<void>>()
+        .mockRejectedValue(
+          new Error('error: Your local changes would be overwritten by checkout:\n\ta.txt\nAborting'),
+        );
+      const load = vi.fn<LoadGraph>();
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'j', 'c', '\r');
+      await tick();
+      expect(lastFrame()).toContain('erro: Your local changes would be overwritten by checkout: a.txt Aborting');
+      // The selection stays and nothing was reloaded.
+      expect(lastFrame()).toContain('3/5');
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it('advertises the key in the footer', () => {
+      const {lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn()} />);
+      expect(lastFrame()).toContain('c checkout');
+      expect(lastFrame()).toContain('q sair');
+    });
+
+    it('does nothing without commits', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>();
+      const empty: GraphData = {rows: [], refs: {byCommit: new Map(), head: {hash: null, branch: 'main'}}};
+      const {lastFrame, stdin} = render(
+        <Browser initial={empty} initialLimit={100} load={vi.fn()} checkout={checkout} />,
+      );
+      await press(stdin, 'c');
+      expect(lastFrame()).not.toContain('Checkout para');
+      expect(checkout).not.toHaveBeenCalled();
+    });
+
+    describe('when the local branch is behind its remote', () => {
+      // origin/feature is at h000002; the local feature is still at h000004.
+      const outOfSync: GraphData = {
+        rows: data(5).rows,
+        refs: {
+          byCommit: new Map([
+            ['h000000', [{name: 'main', kind: 'branch'}]],
+            ['h000002', [{name: 'origin/feature', kind: 'remote'}]],
+            ['h000004', [{name: 'feature', kind: 'branch'}]],
+          ]),
+          head: {hash: 'h000000', branch: 'main'},
+        },
+      };
+      const open = (checkout: (t: CheckoutTarget) => Promise<void>, load = vi.fn<LoadGraph>()) =>
+        render(
+          <Browser initial={outOfSync} initialLimit={100} load={load} checkout={checkout} />,
+        );
+
+      it('suggests checking out the local branch and pulling, selected by default', async () => {
+        const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+        const load = vi.fn<LoadGraph>().mockResolvedValue(outOfSync);
+        const {lastFrame, stdin} = open(checkout, load);
+        await press(stdin, 'j', 'j', 'c');
+        const frame = lastFrame() ?? '';
+        expect(frame).toContain('Branch local e remota estão em commits diferentes');
+        expect(frame).toContain('> feature e pull de origin/feature');
+        expect(frame).toContain('feature (sem pull)');
+        expect(frame).toContain('HEAD destacado neste commit');
+
+        await press(stdin, '\r');
+        await tick();
+        expect(checkout).toHaveBeenCalledWith({kind: 'pull', name: 'feature', remote: 'origin'});
+        expect(load).toHaveBeenCalled();
+        expect(lastFrame()).toContain('agora em feature (atualizada de origin/feature)');
+      });
+
+      it('lets you switch without pulling', async () => {
+        const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+        const {stdin} = open(checkout, vi.fn<LoadGraph>().mockResolvedValue(outOfSync));
+        await press(stdin, 'j', 'j', 'c', '\u001b[B', '\r');
+        await tick();
+        expect(checkout).toHaveBeenCalledWith({kind: 'branch', name: 'feature', unsynced: true});
+      });
+
+      it('lets you detach HEAD at the selected commit', async () => {
+        const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+        const {stdin} = open(checkout, vi.fn<LoadGraph>().mockResolvedValue(outOfSync));
+        await press(stdin, 'j', 'j', 'c', '\u001b[B', '\u001b[B', '\r');
+        await tick();
+        expect(checkout).toHaveBeenCalledWith({kind: 'detach', hash: 'h000002'});
+      });
+
+      it('shows a failed pull and still reloads, since the switch happened', async () => {
+        const checkout = vi
+          .fn<(t: CheckoutTarget) => Promise<void>>()
+          .mockRejectedValue(
+            new PartialCheckoutError('checkout feito para feature, mas o pull falhou: diverged'),
+          );
+        const load = vi.fn<LoadGraph>().mockResolvedValue(outOfSync);
+        const {lastFrame, stdin} = open(checkout, load);
+        await press(stdin, 'j', 'j', 'c', '\r');
+        await tick();
+        await tick();
+        expect(load).toHaveBeenCalled();
+        // The reload must not wipe the message.
+        expect(lastFrame()).toContain('mas o pull falhou');
+      });
+    });
   });
 });

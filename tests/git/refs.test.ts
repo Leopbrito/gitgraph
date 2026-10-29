@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {parseRefs} from '../../src/git/refs.js';
+import {localBranchTips, parseRefs} from '../../src/git/refs.js';
 
 describe('parseRefs', () => {
   it('agrupa branches, remotos e tags por commit', () => {
@@ -21,5 +21,22 @@ describe('parseRefs', () => {
       {name: 'v1', kind: 'tag'},
     ]);
     expect(map.has('x')).toBe(false);
+  });
+});
+
+describe('localBranchTips', () => {
+  it('maps each local branch to its commit, ignoring remotes and tags', () => {
+    const tips = localBranchTips(
+      parseRefs(
+        [
+          'h1\0\0refs/heads/main',
+          'h1\0\0refs/remotes/origin/main',
+          'h2\0\0refs/heads/feature/x',
+          'tagobj\0h3\0refs/tags/v1',
+          'h4\0\0refs/remotes/origin/dev',
+        ].join('\n'),
+      ),
+    );
+    expect(Object.fromEntries(tips)).toEqual({main: 'h1', 'feature/x': 'h2'});
   });
 });
