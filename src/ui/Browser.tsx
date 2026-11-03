@@ -18,6 +18,7 @@ import {
 import type {CopyMethod} from '../clipboard.js';
 import type {ChangesActions} from '../git/changes.js';
 import type {ChangeSource} from '../git/watch.js';
+import type {RefActions} from '../git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../git/stash.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
@@ -33,6 +34,8 @@ import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
 import {followCommit} from './follow.js';
+import {RefManager} from './RefManager.js';
+import {refTargets, type RefMode} from './refTargets.js';
 import {SearchPrompt} from './SearchPrompt.js';
 import {findMatches, firstFrom, nextMatch} from './search.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
@@ -74,6 +77,8 @@ interface Props {
   fetch?: () => Promise<void>;
   /** Applies, pops or drops the stash whose commit has this hash; resolves to the stash name. */
   stash?: (op: StashOp, hash: string) => Promise<string>;
+  /** Creates, renames and deletes branches and tags (keys b, t, T, R, D). */
+  refEdit?: RefActions;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -90,7 +95,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash, refEdit}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -109,6 +114,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [refMode, setRefMode] = useState<RefMode | null>(null);
   // Dropping a stash is the only stash action that asks first: apply and pop keep the changes.
   const [dropping, setDropping] = useState<{hash: string; name: string} | null>(null);
   // Active search (highlight, n/N); `typing` is set while the input is open.
@@ -307,7 +313,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping) return;
+    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -328,6 +334,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   useInput((input, key) => {
     // The commit view has its own keys.
     if (viewing) return;
+
+    // The ref manager handles its own keys.
+    if (refMode) return;
 
     if (dropping) {
       if (key.escape || input === 'n') setDropping(null);
@@ -478,6 +487,23 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       else if (input === 'x') setDropping({hash: commit.hash, name: stashName(commit.hash)});
       else runStash(input === 'a' ? 'apply' : 'pop', commit.hash);
     }
+    else if (input === 'b' || input === 't' || input === 'T' || input === 'R' || input === 'D') {
+      const mode: RefMode = {b: 'branch', t: 'tag', T: 'annotated', R: 'rename', D: 'delete'}[input] as RefMode;
+      if (!commit || notACommit('não dá para criar nem editar refs nele')) return;
+      if (commit.stash) setNotice('um stash não é um commit da história: não dá para criar nem editar refs nele');
+      else if (!refEdit) setNotice('edição de branches e tags indisponível');
+      else if (loading) setNotice('espere a carga terminar');
+      else if ((mode === 'rename' || mode === 'delete') && refTargets(refsOf(commit.hash), mode, data.refs.head.branch).length === 0) {
+        setNotice(
+          mode === 'delete' && refsOf(commit.hash).some(r => r.kind === 'branch' && r.name === data.refs.head.branch)
+            ? 'não dá para apagar a branch atual: troque de branch antes (c)'
+            : 'nenhuma branch local nem tag neste commit',
+        );
+      } else {
+        setError(null);
+        setRefMode(mode);
+      }
+    }
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
@@ -541,6 +567,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     ? confirmHint(prompt.targets.length)
     : mergePrompt
       ? confirmHint(mergePrompt.targets.length)
+      : refMode
+        ? `Esc cancela`
       : dropping
         ? confirmHint(1)
       : conflict
@@ -608,6 +636,19 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           targets={mergePrompt.targets}
           index={mergePrompt.index}
           branch={data.refs.head.branch ?? ''}
+        />
+      ) : refMode && refEdit && commit ? (
+        <RefManager
+          mode={refMode}
+          commit={commit}
+          refs={refsOf(commit.hash)}
+          currentBranch={data.refs.head.branch}
+          actions={refEdit}
+          onCancel={() => setRefMode(null)}
+          onDone={done => {
+            setRefMode(null);
+            reload(revs, limit, false, {follow: true, notice: done});
+          }}
         />
       ) : dropping ? (
         <ConfirmPrompt

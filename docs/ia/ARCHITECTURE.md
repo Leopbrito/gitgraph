@@ -41,6 +41,7 @@ src/
     watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
     status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
     fetch.ts       # fetchAll(): `git fetch --all --prune` com `network: true`; traduz falha de autenticação
+    refsEdit.ts    # RefActions/gitRefActions(): validar, criar, renomear e apagar branches e tags; UnmergedBranchError
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n}); runStash() (apply/pop/drop) e StashConflictError
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -64,6 +65,8 @@ src/
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
     CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
     MergePrompt.tsx # confirmação do merge (idem)
+    RefManager.tsx # criar/renomear/apagar branch e tag: máquina de passos que ocupa o painel e trata as próprias teclas
+    refTargets.ts  # refTargets(): que refs de um commit dá para renomear/apagar (puro)
     ConfirmPrompt.tsx # pergunta sim/não genérica (título e linhas), usada no drop de stash
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
@@ -120,6 +123,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 `s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
+
+### Branches e tags (`b`, `t`, `T`, `R`, `D`)
+
+Como o `Browser` já concentra muito estado, este fluxo mora em `RefManager`, que ocupa o lugar do painel de detalhes e tem o próprio `useInput`; enquanto está aberto (`refMode`), o `useInput` e o mouse do `Browser` ficam inertes (por isso `q`, `j` etc. entram no texto do nome). O `Browser` só decide **se abre** (nunca num stash nem no nó das alterações; precisa de `refEdit`; `R`/`D` precisam de alvos, e a mensagem explica quando o único alvo é a branch atual) e **recarrega** (`reload` com `follow`) quando o `onDone` traz a mensagem. Os passos são `choose` (qual ref, se houver mais de uma) → `name` (campo de texto) → `message` (só tag anotada) / `confirm` / `force`. A ação roda via `RefActions` (`git/refsEdit.ts`, injetada como `load`): uma falha vira uma linha de erro **no mesmo passo**, sem fechar.
+
+O nome é validado em duas etapas: `git check-ref-format --branch` (ou `refs/tags/<nome>`), mais recusa de `HEAD` e de nomes que começam com `-`, e depois a existência (`show-ref`), para criar nunca sobrescrever. Criar usa `git branch <nome> <hash>` e `git tag [-a -m] <nome> <hash>`, então não troca de branch. Renomear tag não existe no git: cria a nova apontando para o mesmo objeto (`git tag novo refs/tags/antigo` aponta para o objeto-tag, mantendo a anotação) e apaga a antiga. Apagar branch usa `git branch -d`; se ele recusa com "not fully merged", `deleteBranch` lança `UnmergedBranchError`, e o `RefManager` conta os commits que só essa branch tem (`uniqueCommits`: `rev-list --count <branch> --not <todas as outras refs>`) e exige **digitar o nome** para forçar com `-D`. Branches remotas não entram nos alvos.
 
 ### Operações de stash (`a`, `p`, `x`)
 

@@ -6,6 +6,7 @@ import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
 import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
+import type {RefActions} from '../../src/git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../../src/git/stash.js';
 import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
 import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
@@ -1219,6 +1220,95 @@ describe('Browser', () => {
     );
     expect(lastFrame()).toContain('main, feature');
     expect(lastFrame()).not.toContain('todas as branches');
+  });
+
+  describe('branches and tags (b, t, T, R, D)', () => {
+    const editor = (): RefActions => ({
+      validate: vi.fn().mockResolvedValue(null),
+      createBranch: vi.fn().mockResolvedValue(undefined),
+      createTag: vi.fn().mockResolvedValue(undefined),
+      renameBranch: vi.fn().mockResolvedValue(undefined),
+      renameTag: vi.fn().mockResolvedValue(undefined),
+      deleteBranch: vi.fn().mockResolvedValue(undefined),
+      deleteTag: vi.fn().mockResolvedValue(undefined),
+      uniqueCommits: vi.fn().mockResolvedValue(0),
+    });
+    const open = (refEdit: RefActions | undefined = editor(), load = vi.fn<LoadGraph>().mockResolvedValue(data(5))) => {
+      const rendered = render(<Browser initial={data(5)} initialLimit={100} load={load} refEdit={refEdit} />);
+      return {...rendered, load, refEdit};
+    };
+
+    it('b opens the name field on the selected commit; creating reloads and confirms', async () => {
+      const {stdin, lastFrame, refEdit, load} = open();
+      await press(stdin, 'j', 'b');
+      expect(lastFrame()).toContain('Nova branch em h000001');
+      // The list keys are the field's now: q and j are letters, not commands.
+      await press(stdin, 'q', 'j');
+      expect(lastFrame()).toContain('Nome: qj');
+      await press(stdin, '\u007F', '\u007F', 'n', 'e', 'w', '\r');
+      await tick();
+      expect(refEdit.createBranch).toHaveBeenCalledWith('new', 'h000001');
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('branch new criada em h000001');
+      expect(lastFrame()).not.toContain('Nova branch');
+    });
+
+    it('Esc closes it without doing anything', async () => {
+      const {stdin, lastFrame, refEdit, load} = open();
+      await press(stdin, 't');
+      expect(lastFrame()).toContain('Nova tag em h000000');
+      await press(stdin, '\u001B');
+      expect(lastFrame()).not.toContain('Nova tag');
+      expect(refEdit.createTag).not.toHaveBeenCalled();
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it('R and D work on the refs of the commit; with none it says so', async () => {
+      const {stdin, lastFrame} = open();
+      // Row 0 holds the current branch main only: nothing to delete, but it can be renamed.
+      await press(stdin, 'D');
+      expect(lastFrame()).toContain('não dá para apagar a branch atual');
+      await press(stdin, 'R');
+      expect(lastFrame()).toContain('Renomear branch main');
+      await press(stdin, '\u001B', 'j', 'R');
+      expect(lastFrame()).toContain('nenhuma branch local nem tag neste commit');
+      await press(stdin, 'D');
+      expect(lastFrame()).toContain('nenhuma branch local nem tag neste commit');
+      await press(stdin, 'j', 'D');
+      expect(lastFrame()).toContain('Apagar branch feature?');
+    });
+
+    it('says so without the actions, on a stash and on the uncommitted node', async () => {
+      const bare = render(<Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(bare.stdin, 'b');
+      expect(bare.lastFrame()).toContain('indisponível');
+
+      const commits = linear(3);
+      commits[0] = {...commits[0]!, stash: true};
+      const stashed = render(
+        <Browser initial={{rows: layoutGraph(commits), refs}} initialLimit={100} load={vi.fn<LoadGraph>()} refEdit={editor()} />,
+      );
+      await press(stashed.stdin, 'b');
+      expect(stashed.lastFrame()).toContain('um stash não é um commit da história');
+      expect(stashed.lastFrame()).not.toContain('Nova branch');
+
+      const wip: Commit = {
+        ...commit(9, ['h000000']),
+        hash: 'uncommitted',
+        uncommitted: {staged: 0, modified: 1, untracked: 0, conflicted: 0},
+      };
+      const dirty = render(
+        <Browser
+          initial={{rows: layoutGraph([wip, ...linear(3)]), refs}}
+          initialLimit={100}
+          load={vi.fn<LoadGraph>()}
+          refEdit={editor()}
+        />,
+      );
+      await press(dirty.stdin, 'b');
+      expect(dirty.lastFrame()).toContain('as alterações não commitadas não são um commit');
+      expect(dirty.lastFrame()).not.toContain('Nova branch');
+    });
   });
 
   describe('fetch (f) and upstream', () => {

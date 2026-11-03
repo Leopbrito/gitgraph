@@ -10,6 +10,7 @@ import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadConfig} from './config.js';
 import {copyText} from './clipboard.js';
+import {gitRefActions} from './git/refsEdit.js';
 import {runStash} from './git/stash.js';
 import {fetchAll} from './git/fetch.js';
 import {describeFilters, loadCommits} from './git/log.js';
@@ -99,6 +100,7 @@ async function main() {
           copy={text => copyText(text)}
           fetch={() => fetchAll(cwd)}
           stash={(op, hash) => runStash(cwd, op, hash)}
+          refEdit={gitRefActions(cwd)}
         />
       </DisplayContext.Provider>,
       {alternateScreen: true},
