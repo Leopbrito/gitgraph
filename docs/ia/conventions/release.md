@@ -26,8 +26,20 @@ O `prebuild` apaga `dist/` antes de compilar, para arquivos de uma compilação 
 
 ### Configuração única
 
-- Crie um **token de automação** no npm (Access Tokens → Granular, com permissão de publicação) e guarde-o em *Settings → Secrets and variables → Actions* do repositório como `NPM_TOKEN`. Nunca em arquivo, commit ou conversa.
-- A primeira publicação de um nome novo reivindica o nome: confira antes que `npm view git-graph-tui` ainda dá 404.
+Duas formas de o workflow se autenticar no npm; o npm tenta a primeira e cai na segunda ([docs](https://docs.npmjs.com/trusted-publishers)).
+
+**1. Trusted publishing (OIDC), recomendado: nenhum segredo guardado.** Exige npm CLI 11.5.1+ e Node 22.14+ (o workflow atualiza o npm) e `id-token: write` (já está nas permissões). Falta só o cadastro, que é no site e só o dono do pacote faz:
+
+1. npmjs.com → pacote `git-graph-tui` → *Settings* → *Trusted publishing* → GitHub Actions.
+2. Preencha **Organization or user** = `Leopbrito`, **Repository** = `gitgraph`, **Workflow filename** = `release.yml` (só o nome, com a extensão; tudo diferencia maiúsculas). O `repository.url` do `package.json` tem de bater com o repositório.
+3. O npm não valida ao salvar: o erro só aparece ao publicar, e uma configuração nova expira se não houver uma publicação bem-sucedida em 2 dias. Faça a próxima versão logo em seguida.
+4. Depois de uma publicação que funcionou por OIDC: apague o bloco `env: NODE_AUTH_TOKEN` do passo de publicação, **revogue o token** no npm, apague o secret `NPM_TOKEN` do repositório e, em *Publishing access*, marque "Require two-factor authentication and disallow tokens". A proveniência passa a ser gerada sozinha (o `--provenance` pode ficar ou sair).
+
+Limites: só runners hospedados pelo GitHub; sem cache no build de release (por isso o `package-manager-cache: false`).
+
+**2. Token de automação (o fallback, enquanto o passo 1 não foi feito).** Crie um token no npm (Access Tokens → Granular, com permissão de publicação) e guarde-o em *Settings → Secrets and variables → Actions* do repositório como `NPM_TOKEN`. Nunca em arquivo, commit ou conversa.
+
+Em qualquer caso, a primeira publicação de um nome novo reivindica o nome: confira antes que `npm view git-graph-tui` ainda dá 404.
 
 ## Publicar à mão (sem o workflow)
 
