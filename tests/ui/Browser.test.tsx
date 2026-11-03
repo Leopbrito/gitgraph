@@ -263,6 +263,23 @@ describe('Browser', () => {
       expect(lastFrame()).not.toContain('Checkout para');
     });
 
+    it('keeps the cursor on the same commit when the reload shifts the rows', async () => {
+      const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
+      // After the checkout a new node appears above everything (like the uncommitted changes).
+      const shifted: GraphData = {
+        rows: layoutGraph([commit(99, ['h000000']), ...linear(5)]),
+        refs: {...refs, head: {hash: 'h000002', branch: 'feature'}},
+      };
+      const load = vi.fn<LoadGraph>().mockResolvedValue(shifted);
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      await press(stdin, 'j', 'j', 'c', '\r');
+      await tick();
+      expect(lastFrame()).toContain('4/6');
+      expect(lastFrame()).toContain('h000002');
+    });
+
     it('also confirms with y', async () => {
       const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
       const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));

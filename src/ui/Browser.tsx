@@ -266,13 +266,13 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     checkout(target)
       .then(() => {
         setNotice(`agora em ${describeTarget(target)}`);
-        // Refreshes refs so the HEAD marker moves; the cursor stays where it is.
-        reload(revs, limit, false);
+        // Refreshes refs so the HEAD marker moves; the cursor stays on the same commit even if rows shifted.
+        reload(revs, limit, false, {follow: true});
       })
       .catch(e => {
         const message = oneLine(e instanceof Error ? e.message : String(e));
         // The switch happened and only the pull failed: refresh so HEAD is right.
-        if (e instanceof PartialCheckoutError) reload(revs, limit, false);
+        if (e instanceof PartialCheckoutError) reload(revs, limit, false, {follow: true});
         else setLoading(false);
         // After reload(), which clears the error when it starts.
         setError(message);
@@ -299,12 +299,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       .then(result => {
         setNotice(mergeNotice(result, target, branch));
         // The result is the newest commit, at the top: select it.
-        reload(revs, limit, result !== 'up-to-date');
+        reload(revs, limit, result !== 'up-to-date', {follow: true});
       })
       .catch(e => {
         if (e instanceof MergeConflictError) {
           // The merge is in progress now: refresh so the header says so, then ask.
-          reload(revs, limit, false);
+          reload(revs, limit, false, {follow: true});
           setConflict({files: e.files, index: 0});
         } else {
           setLoading(false);
@@ -320,7 +320,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       .abort()
       .then(() => {
         setNotice('merge abortado');
-        reload(revs, limit, false);
+        reload(revs, limit, false, {follow: true});
       })
       .catch(e => {
         setLoading(false);
