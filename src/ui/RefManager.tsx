@@ -25,7 +25,7 @@ type Step =
   | {type: 'message'; name: string; value: string}
   | {type: 'confirm'; target: RefTarget}
   // A branch that is not merged: deleting it loses commits, so the name has to be typed.
-  | {type: 'force'; target: RefTarget; lost: number; value: string};
+  | {type: 'force'; target: RefTarget; lost: number | null; value: string};
 
 const oneLine = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
@@ -108,7 +108,8 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
         // Count what would be lost before asking for the strong confirmation.
         actions
           .uniqueCommits(target.name)
-          .catch(() => 0)
+          // Unknown is not zero: the prompt must not claim that nothing is lost.
+          .catch(() => null)
           .then(lost => setStep({type: 'force', target, lost, value: ''}));
         return true;
       },
@@ -229,7 +230,9 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
       {step.type === 'force' && (
         <>
           <Text bold wrap="truncate-end" color={tint(display, 'red')}>
-            {`${step.target.name} não foi mesclada: apagar perde ${step.lost} ${step.lost === 1 ? 'commit' : 'commits'}`}
+            {step.lost === null
+              ? `${step.target.name} não foi mesclada: apagar perde os commits que só ela tem (não deu para contar)`
+              : `${step.target.name} não foi mesclada: apagar perde ${step.lost} ${step.lost === 1 ? 'commit' : 'commits'}`}
           </Text>
           <Text dimColor wrap="truncate-end">
             Esses commits só ficam acessíveis pelo reflog por um tempo. Para forçar (git branch -D), digite o nome:

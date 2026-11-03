@@ -203,6 +203,17 @@ describe('RefManager delete', () => {
     expect(onDone).toHaveBeenCalledWith('branch topic apagada');
   });
 
+  it('does not claim zero lost commits when the count fails', async () => {
+    const deleteBranch = vi.fn().mockRejectedValueOnce(new UnmergedBranchError('topic'));
+    const uniqueCommits = vi.fn().mockRejectedValue(new Error('boom'));
+    const {stdin, lastFrame} = open('delete', [{name: 'topic', kind: 'branch'}], actions({deleteBranch, uniqueCommits}));
+    await press(stdin, 'y');
+    await tick();
+    await tick();
+    expect(lastFrame()).toContain('apagar perde os commits que só ela tem (não deu para contar)');
+    expect(lastFrame()).not.toContain('perde 0');
+  });
+
   it('for an unmerged branch warns how many commits are lost and needs the name typed', async () => {
     const deleteBranch = vi.fn().mockRejectedValueOnce(new UnmergedBranchError('topic')).mockResolvedValue(undefined);
     const {stdin, act, onDone, lastFrame} = open('delete', [{name: 'topic', kind: 'branch'}], actions({deleteBranch}));

@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -103,6 +104,28 @@ describe('reset', () => {
     expect(await r.actions.resetPreview(r.c1)).toEqual({ahead: 2, orphaned: 1, changed: 0});
     expect(await r.actions.resetPreview(r.c3)).toEqual({ahead: 0, orphaned: 0, changed: 0});
   });
+
+  it('handles a branch name with a slash and a detached HEAD', async () => {
+    const r = repo();
+    r.run('checkout', '-q', '-b', 'feature/x');
+    r.commit('f.txt', 'f', 'on feature/x');
+    // The commit is only on feature/x, which is the current branch: nothing else keeps it.
+    expect(await r.actions.resetPreview(r.c3)).toEqual({ahead: 1, orphaned: 1, changed: 0});
+    r.run('checkout', '-q', '--detach');
+    // Detached: the branch still keeps the commit.
+    expect(await r.actions.resetPreview(r.c3)).toEqual({ahead: 1, orphaned: 0, changed: 0});
+  });
+
+  it('does not list every ref as an argument (tens of thousands of tags)', async () => {
+    const r = repo();
+    // More than the OS allows in a command line (about 1 MB on macOS, 2 MB on Linux).
+    const names = Array.from({length: 30_000}, (_, i) => `refs/tags/${'t'.repeat(70)}-${i}`);
+    execFileSync('git', ['update-ref', '--stdin'], {
+      cwd: r.dir,
+      input: names.map(name => `create ${name} ${r.c1}\n`).join(''),
+    });
+    expect(await r.actions.resetPreview(r.c1)).toEqual({ahead: 2, orphaned: 2, changed: 0});
+  }, 60_000);
 
   it('counts the tracked files a hard reset would discard, not the untracked ones', async () => {
     const r = repo();

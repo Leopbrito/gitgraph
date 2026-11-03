@@ -52,12 +52,12 @@ export function gitHistoryActions(cwd: string): HistoryActions {
     revert: (hash, mainline) => step(['revert', '--no-edit', ...(mainline ? ['-m', '1'] : []), hash]),
     async resetPreview(target) {
       const ahead = await count(`${target}..HEAD`);
-      // Reachable from HEAD but from neither the target nor any other branch, remote or tag.
+      // Reachable from HEAD but from neither the target nor any other branch, remote or tag. Git
+      // expands the refs itself (--branches and friends): listing them here could pass the OS limit
+      // on the size of the arguments in a repository with tens of thousands of tags.
       const current = (await git(['symbolic-ref', '-q', 'HEAD'], cwd).catch(() => '')).trim();
-      const others = (await git(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes', 'refs/tags'], cwd))
-        .split('\n')
-        .filter(ref => ref !== '' && ref !== current);
-      const orphaned = await count('HEAD', '--not', target, ...others);
+      const exclude = current.startsWith('refs/heads/') ? [`--exclude=${current.slice('refs/heads/'.length)}`] : [];
+      const orphaned = await count('HEAD', '--not', target, ...exclude, '--branches', '--remotes', '--tags');
       const tree = await loadWorkingTree(cwd);
       return {ahead, orphaned, changed: tree ? tree.staged + tree.modified + tree.conflicted : 0};
     },

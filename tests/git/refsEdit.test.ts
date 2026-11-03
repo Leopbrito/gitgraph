@@ -100,6 +100,14 @@ describe('delete', () => {
     expect(await actions.uniqueCommits('same')).toBe(0);
   });
 
+  it('counts a branch with a slash in its name', async () => {
+    const {actions, run} = repo();
+    run('checkout', '-q', '-b', 'feature/x');
+    run('commit', '--allow-empty', '-q', '-m', 'unique');
+    run('checkout', '-q', 'main');
+    expect(await actions.uniqueCommits('feature/x')).toBe(1);
+  });
+
   it('git refuses to delete the checked-out branch', async () => {
     const {actions} = repo();
     await expect(actions.deleteBranch('main', false)).rejects.toThrow();

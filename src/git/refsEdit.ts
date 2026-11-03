@@ -70,10 +70,11 @@ export function gitRefActions(cwd: string): RefActions {
       await git(['tag', '-d', name], cwd);
     },
     async uniqueCommits(branch) {
-      const others = (await git(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes', 'refs/tags'], cwd))
-        .split('\n')
-        .filter(ref => ref !== '' && ref !== fullName('branch', branch));
-      const count = await git(['rev-list', '--count', fullName('branch', branch), '--not', ...others], cwd);
+      // The other refs are expanded by git (see resetPreview in history.ts), not listed as arguments.
+      const count = await git(
+        ['rev-list', '--count', fullName('branch', branch), '--not', `--exclude=${branch}`, '--branches', '--remotes', '--tags'],
+        cwd,
+      );
       return Number(count.trim());
     },
   };
