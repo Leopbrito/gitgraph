@@ -15,15 +15,15 @@ import {gitOperationActions} from './git/operation.js';
 import {gitRefActions} from './git/refsEdit.js';
 import {runStash} from './git/stash.js';
 import {fetchAll} from './git/fetch.js';
-import {describeFilters, loadCommits} from './git/log.js';
+import {describeFilters, loadCommits, streamCommits, type LogOptions} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {verifyRevisions} from './git/revs.js';
 import {watchRepository} from './git/watch.js';
 import {enableTerminalMouse} from './terminalMouse.js';
-import {layoutGraph} from './graph/layout.js';
+import {createLayout, layoutGraph} from './graph/layout.js';
 import {Browser, type LoadGraph} from './ui/Browser.js';
 import {DisplayContext} from './ui/display.js';
-import {formatPlain} from './ui/plain.js';
+import {plainLines} from './ui/plain.js';
 
 /** Commits carregados de início na TUI; o resto vem sob demanda. */
 const DEFAULT_LIMIT = 500;
@@ -45,33 +45,52 @@ async function main() {
     throw new UsageError(`-C: ${options.directory} não é um diretório`);
   }
   await verifyRevisions(cwd, options.revs);
+  const logOptions = (revs: string[], maxCount: number | undefined): LogOptions => ({
+    ...(revs.length === 0 ? {all: true} : {revs}),
+    maxCount,
+    paths: options.paths,
+    order: options.order,
+    stashes: options.stash,
+    uncommitted: options.uncommitted,
+    ...options.filters,
+  });
   // Refs are read on every load: after a checkout, HEAD has moved.
   const graph = async (revs: string[], maxCount: number | undefined) => {
-    const [commits, refs] = await Promise.all([
-      loadCommits(
-        cwd,
-        revs.length === 0
-          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash, uncommitted: options.uncommitted, ...options.filters}
-          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash, uncommitted: options.uncommitted, ...options.filters},
-      ),
-      loadRefs(cwd),
-    ]);
+    const [commits, refs] = await Promise.all([loadCommits(cwd, logOptions(revs, maxCount)), loadRefs(cwd)]);
     return {rows: layoutGraph(commits), refs};
   };
 
   // Sem TTY (pipe/redirecionamento) a saída é texto puro e completa, como o `git log`.
   if (!process.stdout.isTTY) {
-    const {rows, refs} = await graph(options.revs, options.maxCount);
-    if (rows.length === 0) {
-      console.error('gitgraph: o repositório não tem commits');
-      return;
-    }
     // O leitor pode fechar o pipe antes do fim (`| head`, `| less` + q): sai sem erro.
     process.stdout.on('error', error => {
       if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0);
       throw error;
     });
-    for (const line of formatPlain(rows, refs, {ascii: options.ascii, spaced: !options.compact, date: options.date})) console.log(line);
+    const rows = async function* () {
+      const next = createLayout();
+      for await (const commit of streamCommits(cwd, logOptions(options.revs, options.maxCount))) yield next(commit);
+    };
+    // The text is aligned to the widest row, so a first pass measures it. Only the width is kept,
+    // which lets the history be any size; the second pass writes each row as it is read.
+    let width = 0;
+    let count = 0;
+    for await (const row of rows()) {
+      width = Math.max(width, row.width);
+      count++;
+    }
+    if (count === 0) {
+      console.error('gitgraph: o repositório não tem commits');
+      return;
+    }
+    const refs = await loadRefs(cwd);
+    const style = {ascii: options.ascii, spaced: !options.compact, date: options.date};
+    for await (const row of rows()) {
+      for (const line of plainLines(row, refs, width, style)) {
+        // Respect backpressure: wait for the reader instead of queueing the whole history.
+        if (!process.stdout.write(`${line}\n`)) await new Promise<void>(resolve => process.stdout.once('drain', resolve));
+      }
+    }
     return;
   }
 

@@ -13,12 +13,19 @@ import type {Commit, GraphRow} from './types.js';
  * - pai que já tem lane recebe a aresta nela, sem abrir lane duplicada.
  */
 export function layoutGraph(commits: Commit[]): GraphRow[] {
+  return commits.map(createLayout());
+}
+
+/**
+ * The layout one commit at a time, for output that is written as the commits
+ * arrive: call the result with each commit in order and it returns its row.
+ */
+export function createLayout(): (commit: Commit) => GraphRow {
   let lanes: string[] = [];
   let colors: number[] = [];
   let nextColor = 0;
-  const rows: GraphRow[] = [];
 
-  for (const commit of commits) {
+  return commit => {
     const lanesBefore = [...lanes];
     const colorsBefore = [...colors];
     let column = lanesBefore.indexOf(commit.hash);
@@ -47,7 +54,7 @@ export function layoutGraph(commits: Commit[]): GraphRow[] {
       insertAt++;
     }
 
-    rows.push({
+    const row: GraphRow = {
       commit,
       column,
       lanesBefore,
@@ -56,10 +63,9 @@ export function layoutGraph(commits: Commit[]): GraphRow[] {
       colorsAfter,
       edges: commit.parents.map(parent => ({parent, column: lanesAfter.indexOf(parent)})),
       width: Math.max(1, lanesBefore.length, lanesAfter.length),
-    });
+    };
     lanes = lanesAfter;
     colors = colorsAfter;
-  }
-
-  return rows;
+    return row;
+  };
 }

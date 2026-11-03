@@ -1,6 +1,6 @@
 import type {Commit} from '../graph/types.js';
-import {git} from './exec.js';
-import {parseLog} from './parse.js';
+import {git, gitStream} from './exec.js';
+import {LOG_FIELDS, parseLog} from './parse.js';
 import {loadStashes} from './stash.js';
 import {loadWorkingTree, uncommittedNode} from './status.js';
 
@@ -74,10 +74,10 @@ export interface LogOptions extends LogFilters {
   uncommitted?: boolean;
 }
 
-export async function loadCommits(
-  cwd: string,
-  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false, uncommitted = false, ...filters}: LogOptions = {},
-): Promise<Commit[]> {
+/** The arguments of `git log` for these options. */
+function logArgs(
+  {all = false, revs = [], maxCount, paths = [], order = 'date', ...filters}: LogOptions,
+): string[] {
   const args = ['log', '-z', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
   // With paths, git drops the commits that did not touch them; --parents makes %P show the
   // surviving parents instead of the original ones, so the layout does not wait for lost commits.
@@ -95,68 +95,117 @@ export async function loadCommits(
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
   // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.
   args.push('--', ...paths);
+  return args;
+}
+
+/** Commits parsed from the output of `git log -z` as it arrives, without holding the whole output. */
+async function* streamLog(args: string[], cwd: string): AsyncGenerator<Commit, void, undefined> {
+  let pending = '';
+  let fields: string[] = [];
+  for await (const chunk of gitStream(args, cwd)) {
+    pending += chunk;
+    const parts = pending.split('\0');
+    pending = parts.pop() ?? '';
+    for (const part of parts) {
+      fields.push(part);
+      if (fields.length === LOG_FIELDS) {
+        yield parseLog(fields.join('\0') + '\0')[0] as Commit;
+        fields = [];
+      }
+    }
+  }
+  if (fields.length > 0 || pending !== '') {
+    throw new Error(`Registro de commit inválido: ${JSON.stringify(fields.join('\0') + pending)}`);
+  }
+}
+
+/**
+ * The commits one at a time, as `git log` prints them, with the stashes and the
+ * uncommitted changes inserted where `loadCommits` puts them. Memory stays flat
+ * for a long history, except with `--author`, `--since` or `--until`, whose
+ * parents can only be fixed once every commit is known (see `relink`).
+ */
+export async function* streamCommits(
+  cwd: string,
+  options: LogOptions = {},
+): AsyncGenerator<Commit, void, undefined> {
+  const {stashes = false, uncommitted = false, author, since, until, firstParent} = options;
+  const needsAll = author !== undefined || since !== undefined || until !== undefined;
+  let source: AsyncIterable<Commit> = streamLog(logArgs(options), cwd);
+  if (firstParent) source = mapParents(source, parents => parents.slice(0, 1));
+  if (needsAll) source = buffered(source);
+
+  const stashed = stashes ? await stashNodes(cwd) : new Map<string, Commit[]>();
+  const working = uncommitted ? await workingNode(cwd) : undefined;
   try {
-    const commits = relink(parseLog(await git(args, cwd)), filters);
-    const stashed = stashes ? await withStashes(cwd, commits) : commits;
-    return uncommitted ? await withUncommitted(cwd, stashed) : stashed;
+    for await (const commit of source) {
+      // Above the commit they belong to: the changes first, then the stashes (newest first).
+      if (working && commit.hash === working.parents[0]) yield working;
+      for (const node of stashed.get(commit.hash) ?? []) yield node;
+      yield commit;
+    }
   } catch (error) {
     // Repositório recém-criado, sem commits: não é erro.
-    if (error instanceof Error && /does not have any commits/.test(error.message)) {
-      return [];
-    }
+    if (error instanceof Error && /does not have any commits/.test(error.message)) return;
     throw error;
   }
 }
 
+export async function loadCommits(cwd: string, options: LogOptions = {}): Promise<Commit[]> {
+  const commits: Commit[] = [];
+  for await (const commit of streamCommits(cwd, options)) commits.push(commit);
+  return commits;
+}
+
+async function* mapParents(source: AsyncIterable<Commit>, map: (parents: string[]) => string[]) {
+  for await (const commit of source) yield {...commit, parents: map(commit.parents)};
+}
+
 /**
- * Adds the uncommitted changes as one node whose parent is HEAD, placed right
- * above it like a stash (a node at the very top would open a long lane down to
- * HEAD when HEAD is not the newest commit). With stashes on the same commit the
- * changes go above them. Failing to read the status must not hide the history.
+ * Reads everything, then drops the parents that are not in the list: a commit
+ * filtered out by author or date is not replaced by its ancestors in `%P`
+ * (only path limiting rewrites parents), so the layout would keep a lane open
+ * for a commit that never arrives.
  */
-async function withUncommitted(cwd: string, commits: Commit[]): Promise<Commit[]> {
+async function* buffered(source: AsyncIterable<Commit>) {
+  const all: Commit[] = [];
+  for await (const commit of source) all.push(commit);
+  const shown = new Set(all.map(c => c.hash));
+  for (const commit of all) yield {...commit, parents: commit.parents.filter(p => shown.has(p))};
+}
+
+/**
+ * The uncommitted changes as one node whose parent is HEAD, placed right above
+ * it like a stash (a node at the very top would open a long lane down to HEAD
+ * when HEAD is not the newest commit). Failing to read the status must not hide
+ * the history.
+ */
+async function workingNode(cwd: string): Promise<Commit | undefined> {
   try {
     const head = (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd)).trim();
-    let at = commits.findIndex(commit => commit.hash === head);
-    if (at === -1) return commits;
     const tree = await loadWorkingTree(cwd);
-    if (!tree) return commits;
-    while (at > 0 && commits[at - 1]?.stash && commits[at - 1]?.parents[0] === head) at--;
-    return [...commits.slice(0, at), uncommittedNode(tree, head), ...commits.slice(at)];
+    return tree ? uncommittedNode(tree, head) : undefined;
   } catch {
     // No HEAD yet (empty repository) or git failed.
-    return commits;
+    return undefined;
   }
 }
 
 /**
- * Makes the parents match what was listed, so the layout does not keep a lane
- * open for a commit that will never arrive. `--first-parent` still prints every
- * parent of a merge, and a commit filtered out by author or date is not
- * replaced by its ancestors in `%P` (only path limiting rewrites parents).
- */
-function relink(commits: Commit[], {firstParent, author, since, until}: LogFilters): Commit[] {
-  let result = commits;
-  if (firstParent) result = result.map(c => ({...c, parents: c.parents.slice(0, 1)}));
-  if (author !== undefined || since !== undefined || until !== undefined) {
-    const shown = new Set(result.map(c => c.hash));
-    result = result.map(c => ({...c, parents: c.parents.filter(p => shown.has(p))}));
-  }
-  return result;
-}
-
-/**
- * Adds each stash entry as a node whose only parent is the commit the stash
- * was made on. A stash commit also has internal parents (the index, the
- * untracked files); they stay out of the graph, which is why `--all` excludes
- * refs/stash. The node goes immediately above its base commit instead of at
- * its date: that avoids a long lane from the top of the graph down to the
+ * Each stash entry as a node whose only parent is the commit the stash was
+ * made on, keyed by that commit. A stash commit also has internal parents (the
+ * index, the untracked files); they stay out of the graph, which is why `--all`
+ * excludes refs/stash. The node goes immediately above its base commit instead
+ * of at its date: that avoids a long lane from the top of the graph down to the
  * base, and keeps the rows already shown stable when more history is loaded.
+ * Several stashes on one base stay newest first. A stash whose base never shows
+ * up in the list is left out.
  */
-async function withStashes(cwd: string, commits: Commit[]): Promise<Commit[]> {
+async function stashNodes(cwd: string): Promise<Map<string, Commit[]>> {
+  const byBase = new Map<string, Commit[]>();
   try {
     const entries = await loadStashes(cwd);
-    if (entries.length === 0) return commits;
+    if (entries.length === 0) return byBase;
     const read = parseLog(
       await git(
         ['log', '-z', '--no-walk=unsorted', `--format=${LOG_FORMAT}`, ...entries.map(e => e.hash), '--'],
@@ -164,19 +213,14 @@ async function withStashes(cwd: string, commits: Commit[]): Promise<Commit[]> {
       ),
     );
     const byHash = new Map(read.map(commit => [commit.hash, commit]));
-    const result = [...commits];
-    // Newest first: each one lands directly above the base, below the newer ones.
     for (const {hash} of entries) {
       const stash = byHash.get(hash);
       const base = stash?.parents[0];
-      const at = result.findIndex(commit => commit.hash === base);
-      if (stash && base && at !== -1) {
-        result.splice(at, 0, {...stash, parents: [base], stash: true});
-      }
+      if (!stash || !base) continue;
+      byBase.set(base, [...(byBase.get(base) ?? []), {...stash, parents: [base], stash: true}]);
     }
-    return result;
   } catch {
     // A broken stash must not hide the real history.
-    return commits;
   }
+  return byBase;
 }

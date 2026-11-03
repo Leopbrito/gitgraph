@@ -43,8 +43,9 @@ src/
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
+                   # gitStream(): o mesmo git via spawn, entregando a saída aos poucos (com backpressure) e matando o processo se o consumidor parar
     revs.ts        # verifyRevisions()/revisionNames(): valida as revisões da linha de comando (`rev-parse --verify`)
-    log.ts         # loadCommits(): git log -> Commit[] (all/revs/paths/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
+    log.ts         # streamCommits(): git log -z -> Commit um a um, com stash e alterações no lugar certo; loadCommits() junta num Commit[] (all/revs/paths/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
     status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
@@ -119,7 +120,7 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 ### Saída
 
 - **TTY:** `Browser` roda em tela alternativa (`alternateScreen` do Ink), então o scrollback do terminal não é afetado. O layout tem altura fixa: cabeçalho, lista, separador, detalhes (5 linhas) e rodapé, mais 1 linha de folga (se a saída ocupar todas as linhas, o Ink limpa a tela a cada render). Cada linha é truncada na largura do terminal.
-- **Sem TTY (pipe/redirecionamento):** `formatPlain` imprime texto puro, sem cor nem quebra, como o `git log`. Não passa pelo Ink.
+- **Sem TTY (pipe/redirecionamento):** imprime texto puro, sem cor nem quebra, como o `git log`, e não passa pelo Ink. A saída não cabe na memória: `streamCommits` + `createLayout` (o layout um commit por vez) rodam em **duas passadas**: a primeira só mede a largura do grafo mais largo (o texto é alinhado a ela) e descarta as linhas; a segunda escreve cada linha (`plainLines`) esperando o `drain` do stdout. Se o leitor fecha o pipe (`| head`), o processo sai e o git para. Com `--author`, `--since` ou `--until` o `streamCommits` lê tudo antes (`relink` precisa da lista inteira). `formatPlain` continua existindo para quem tem as linhas em mãos (testes).
 - Cada coluna do grafo ocupa 2 caracteres (glifo + espaço, `─`, `╱` ou `╲`).
 
 ### Grafos largos (`h`/`l`)

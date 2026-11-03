@@ -68,6 +68,24 @@ describe('cli (pipe mode)', () => {
   });
 });
 
+describe('cli (pipe mode, long output)', () => {
+  it('writes the whole history, aligned, and ends quietly when the reader stops early', async () => {
+    const {dir, run} = repo();
+    for (let i = 0; i < 120; i++) run('commit', '--allow-empty', '-q', '-m', `more ${i}`);
+    const all = (await gitgraph(dir)).stdout.trimEnd().split('\n');
+    // 120 + base + 2 branch commits, plus connector lines in the spaced layout.
+    expect(all.filter(line => line.includes('Ana,'))).toHaveLength(123);
+
+    // `| head -1` closes the pipe long before the end: no error, exit status of head.
+    const head = await exec('sh', ['-c', `${tsx} ${entry} | head -1; echo "status=\${PIPESTATUS:-ok}"`], {
+      cwd: dir,
+      env: {...process.env, NO_COLOR: '1'},
+    }).catch((error: {stdout: string; stderr: string}) => error);
+    expect(head.stderr).toBe('');
+    expect(head.stdout.split('\n')[0]).toBe(all[0]);
+  });
+});
+
 describe('cli (config file)', () => {
   function configDir(content: string) {
     const root = mkdtempSync(join(tmpdir(), 'gitgraph-config-'));

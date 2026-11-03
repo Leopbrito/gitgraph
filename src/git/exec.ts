@@ -1,4 +1,4 @@
-import {execFile} from 'node:child_process';
+import {execFile, spawn} from 'node:child_process';
 
 /** Time limit for commands that talk to a remote. */
 const NETWORK_TIMEOUT_MS = 120_000;
@@ -39,6 +39,40 @@ export function git(args: string[], cwd: string, {network = false, env}: GitOpti
   });
 }
 
+/**
+ * Runs git and yields its stdout as it arrives (decoded as UTF-8), so a huge
+ * output never has to fit in memory. The consumer pulling slowly slows git
+ * down too (backpressure). Stopping early kills the process; a failure is
+ * thrown once the output ends, with the same messages as `git()`.
+ */
+export async function* gitStream(args: string[], cwd: string): AsyncGenerator<string, void, undefined> {
+  const child = spawn('git', args, {cwd, env: {...process.env, LC_ALL: 'C'}, stdio: ['ignore', 'pipe', 'pipe']});
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (data: string) => {
+    if (stderr.length < 64 * 1024) stderr += data;
+  });
+  let failure: Error | undefined;
+  const closed = new Promise<number | null>(resolve => {
+    child.on('error', error => {
+      failure = error;
+      resolve(null);
+    });
+    child.on('close', code => resolve(code));
+  });
+  child.stdout.setEncoding('utf8');
+  let finished = false;
+  try {
+    for await (const chunk of child.stdout) yield chunk as string;
+    finished = true;
+  } finally {
+    if (!finished) child.kill();
+  }
+  const code = await closed;
+  if (failure) throw describeError(failure as NodeJS.ErrnoException, stderr, cwd);
+  if (code !== 0) throw describeError({message: `Command failed: git ${args.join(' ')}`}, stderr, cwd);
+}
+
 function describeError(
   error: {code?: string | number; message: string; killed?: boolean},
   stderr: string,
@@ -46,6 +80,9 @@ function describeError(
 ): Error {
   if (error.code === 'ENOENT') return new Error('git não encontrado no PATH');
   if (error.killed) return new Error('tempo esgotado ao falar com a remota');
+  if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+    return new Error('a saída do git é grande demais; limite o histórico com -n ou um caminho');
+  }
   if (/not a git repository/i.test(stderr)) {
     return new Error(`${cwd} não é um repositório git`);
   }
