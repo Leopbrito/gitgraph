@@ -127,19 +127,31 @@ export async function loadFullDiff(cwd: string, commit: Commit, file: ChangedFil
 /** Most recent results kept: going back and forth between commits is the common case. */
 const CACHE_SIZE = 50;
 
-/** The real git behind `ChangesActions`, with a small cache (commits are immutable). */
-export function gitChanges(cwd: string): ChangesActions {
+/**
+ * A promise cache that drops the least recently used entry beyond `size`: a hit moves the entry to the
+ * end of the Map (which keeps insertion order), so the first key is always the one used longest ago.
+ * A failure is not kept, since it may be gone on the next try.
+ */
+export function lruCache(size: number) {
   const cache = new Map<string, Promise<unknown>>();
-  const cached = <T>(key: string, run: () => Promise<T>): Promise<T> => {
+  return <T>(key: string, run: () => Promise<T>): Promise<T> => {
     const hit = cache.get(key);
-    if (hit) return hit as Promise<T>;
+    if (hit) {
+      cache.delete(key);
+      cache.set(key, hit);
+      return hit as Promise<T>;
+    }
     const promise = run();
     cache.set(key, promise);
-    // A failure is not worth keeping: it may be gone on the next try.
     promise.catch(() => cache.delete(key));
-    if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string);
+    if (cache.size > size) cache.delete(cache.keys().next().value as string);
     return promise;
   };
+}
+
+/** The real git behind `ChangesActions`, with a small cache (commits are immutable). */
+export function gitChanges(cwd: string): ChangesActions {
+  const cached = lruCache(CACHE_SIZE);
   return {
     files: commit => cached(`files:${commit.hash}`, () => loadChanges(cwd, commit)),
     diff: (commit, file) =>

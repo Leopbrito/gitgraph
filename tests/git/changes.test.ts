@@ -1,7 +1,7 @@
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {gitChanges, loadChanges, loadDiff, loadFullDiff, parseChanges, splitDiff} from '../../src/git/changes.js';
+import {gitChanges, loadChanges, loadDiff, loadFullDiff, lruCache, parseChanges, splitDiff} from '../../src/git/changes.js';
 import type {Commit} from '../../src/graph/types.js';
 import {createRepo} from './helpers.js';
 
@@ -149,5 +149,31 @@ describe('git', () => {
     const bad = {...commit, hash: 'f'.repeat(40), parents: []};
     await expect(actions.files(bad)).rejects.toThrow();
     await expect(actions.files(bad)).rejects.toThrow();
+  });
+});
+
+describe('lruCache', () => {
+  it('evicts the entry used longest ago, not the one inserted first', async () => {
+    const cached = lruCache(2);
+    const run = vi.fn((value: string) => Promise.resolve(value));
+    await cached('a', () => run('a'));
+    await cached('b', () => run('b'));
+    // Using `a` again makes `b` the least recently used.
+    await cached('a', () => run('a'));
+    await cached('c', () => run('c'));
+    run.mockClear();
+
+    await cached('a', () => run('a'));
+    expect(run).not.toHaveBeenCalled();
+    await cached('b', () => run('b'));
+    expect(run).toHaveBeenCalledWith('b');
+  });
+
+  it('does not keep a failure', async () => {
+    const cached = lruCache(2);
+    const run = vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValue('ok');
+    await expect(cached('k', run)).rejects.toThrow('boom');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await expect(cached('k', run)).resolves.toBe('ok');
   });
 });
