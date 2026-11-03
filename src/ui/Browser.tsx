@@ -16,6 +16,7 @@ import {
   type MergeTarget,
 } from '../git/merge.js';
 import type {ChangesActions} from '../git/changes.js';
+import type {ChangeSource} from '../git/watch.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
@@ -28,6 +29,7 @@ import {separator, tint, useDisplay} from './display.js';
 import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
+import {followCommit} from './follow.js';
 import {SearchPrompt} from './SearchPrompt.js';
 import {findMatches, firstFrom, nextMatch} from './search.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
@@ -61,6 +63,8 @@ interface Props {
   changes: ChangesActions;
   /** Clicks and wheel events; without it the list only answers to the keyboard. */
   mouse?: MouseSource;
+  /** Fires when the repository changed outside the TUI (--watch); reloads the graph. */
+  watch?: ChangeSource;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -77,7 +81,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -121,16 +125,24 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const end = visibleEnd(heights, offset, listHeight);
   const pageSize = Math.max(1, end - offset);
 
+  // What the cursor pointed at when a reload was asked for, to find the same commit again.
+  const latest = useRef({rows: initial.rows, selected: 0});
+  latest.current = {rows: data.rows, selected: cursor.selected};
+
   const reload = useCallback(
-    (nextRevs: string[], nextLimit: number, resetCursor: boolean) => {
+    (nextRevs: string[], nextLimit: number, resetCursor: boolean, after?: {follow?: boolean; notice?: string}) => {
       const id = ++request.current;
       setLoading(true);
       setError(null);
       load(nextRevs, nextLimit)
         .then(next => {
           if (id !== request.current) return;
+          const {rows: before, selected} = latest.current;
           setData(next);
           if (resetCursor) setCursor({selected: 0, offset: 0});
+          // The commit under the cursor may have moved (new commits above it) or vanished.
+          else if (after?.follow) setCursor(c => ({...c, selected: followCommit(before, selected, next.rows)}));
+          if (after?.notice) setNotice(after.notice);
         })
         .catch(e => {
           if (id === request.current) setError(e instanceof Error ? e.message : String(e));
@@ -262,6 +274,11 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   };
   useEffect(() => mouse?.subscribe(event => onMouse.current(event)), [mouse]);
 
+  // Same latest-closure trick: the subscription must not be remade on every render.
+  const refresh = useRef<(notice: string) => void>(() => {});
+  refresh.current = notice => reload(revs, limit, false, {follow: true, notice});
+  useEffect(() => watch?.subscribe(() => refresh.current('atualizado (o repositório mudou)')), [watch]);
+
   useInput((input, key) => {
     // The commit view has its own keys.
     if (viewing) return;
@@ -373,6 +390,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if ((key.return || input === 'd') && commit) setViewing(true);
+    else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
       setQuery('');
@@ -441,7 +459,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         : picker
           ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
           : (notice ??
-            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}j/k ${arrows} mover ${dot} g/G ${dot} Enter detalhes ${dot} s busca ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
+            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}j/k ${arrows} mover ${dot} Enter abre ${dot} r atualiza ${dot} s busca ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
 
   if (viewing && commit) {
     return (

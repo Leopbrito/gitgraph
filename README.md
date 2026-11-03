@@ -48,6 +48,7 @@ gitgraph [opções] [<revisão>...] [-- <caminho>...]
 | `--compact` | Uma linha por commit, sem a linha de ligação (`│`) entre eles. Por padrão, commits seguidos são ligados por um traço, o que ocupa mais linhas. |
 | `--order <ordem>` | Ordem dos commits: `date` (padrão, por data do commit), `author-date` (por data do autor) ou `topo` (mantém cada linha de história junta). A ordem por data intercala as branches e deixa o grafo bem mais estreito; `topo` pode ser melhor em históricos com poucas branches longas e simultâneas. |
 | `--no-stash` | Não mostra os stashes no grafo. |
+| `--watch` | Recarrega o grafo sozinho quando o repositório muda fora da interface (commit, checkout, fetch em outro terminal). Observa `HEAD`, o índice, `packed-refs` e `refs/` com espera de 300 ms. Sem a opção, use `r`. |
 | `--no-mouse` | Desliga o suporte a mouse (veja abaixo). |
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
@@ -66,6 +67,7 @@ Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como
 | `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Num stash, só avisa que não dá para fazer checkout. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
 | `g` / `Home`, `G` / `End` | Vai ao início, ao fim |
 | `m` | Merge na branch atual, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela): da branch que aponta para o commit selecionado (uma lista, se forem várias, incluindo remotas) ou do próprio commit. Em conflito, você escolhe entre abortar e deixar em andamento. |
+| `r` | Recarrega o grafo (log, refs e stashes) mantendo o commit selecionado pelo hash; se ele sumiu (reset, branch apagada), vai para o ancestral mais próximo que ainda está na lista. O rodapé avisa `atualizado`. |
 | `s` | Busca commits já carregados por mensagem (assunto e corpo), autor, e-mail ou hash, sem diferenciar maiúsculas: digite e a seleção pula para o primeiro resultado a partir de onde você estava; `Enter` confirma, `Esc` cancela e volta. |
 | `n` / `N` | Próximo / anterior resultado da busca (voltam ao início/fim ao chegar na ponta). `Esc` limpa a busca. |
 | `/` | Filtra por uma ou mais branches: digite para buscar, `↑`/`↓` movem, `Espaço` marca/desmarca, `Enter` aplica, `Esc` cancela |

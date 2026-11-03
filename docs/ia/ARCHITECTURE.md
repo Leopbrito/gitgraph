@@ -36,6 +36,7 @@ src/
     revs.ts        # verifyRevisions()/revisionNames(): valida as revisões da linha de comando (`rev-parse --verify`)
     log.ts         # loadCommits(): git log -> Commit[] (all/revs/paths/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
+    watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -63,6 +64,7 @@ src/
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
     mouse.ts       # parseMouse(): relatórios SGR -> eventos de clique/roda (puro); MouseSource
     picker.ts      # lista e filtro de branches (puro)
+    follow.ts      # followCommit(): onde está o commit selecionado depois de recarregar (puro)
     search.ts      # matchesCommit()/findMatches()/firstFrom()/nextMatch(): busca em memória nos commits carregados (puro)
     SearchPrompt.tsx # campo de busca (ocupa o lugar do painel de detalhes)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
@@ -112,6 +114,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 `s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
+
+### Recarga (`r` e `--watch`)
+
+`r` chama `reload(revs, limit, false, {follow: true, notice})`. Com `follow`, depois da carga o cursor vai para `followCommit(linhasAntes, selecionado, linhasDepois)`: o mesmo hash; senão o ancestral mais próximo que ainda está na lista (andando pelos pais); senão a mesma posição. As linhas "de antes" vêm de uma ref (`latest`) atualizada a cada render, porque a promessa resolve depois e o estado do closure já seria velho. O resto do fluxo é o `reload` de sempre, então um pedido mais novo descarta o anterior (`request`) e a falha vira o erro do rodapé sem trocar a lista. Os outros `reload` (checkout, merge) mantêm o cursor por posição, como antes.
+
+`--watch` liga `watchRepository` (`git/watch.ts`): `fs.watch` não recursivo no diretório git (e no comum, num worktree ligado), filtrando `HEAD`, `index`, `packed-refs` e `MERGE_HEAD`, mais um `fs.watch` recursivo em `refs/`. Um comando git mexe em vários arquivos, então os eventos têm debounce de 300 ms. O `Browser` recebe a fonte como `watch?: ChangeSource`, como `load` e `mouse`, e cada evento faz o mesmo reload do `r`. **Cuidado:** o que a TUI roda para se recarregar não pode alterar o que se observa, ou o `--watch` entra em laço. Hoje só `git log`/`for-each-ref` (somente leitura); qualquer `git status` novo deve usar `--no-optional-locks`, que impede o git de regravar o índice.
 
 ### Mouse
 

@@ -1144,6 +1144,55 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('refresh', () => {
+    /** The history grown by one commit on top: what a `git commit` elsewhere would produce. */
+    const grown = (): GraphData => {
+      const old = linear(5);
+      const fresh = commit(9, [old[0]?.hash ?? '']);
+      return {rows: layoutGraph([fresh, ...old]), refs};
+    };
+
+    it('r reloads, keeps the selected commit and says so', async () => {
+      const load = vi.fn<LoadGraph>().mockResolvedValue(grown());
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
+      await press(stdin, 'j', 'j');
+      expect(lastFrame()).toContain('h000002');
+      await press(stdin, 'r');
+      await tick();
+      expect(load).toHaveBeenCalledWith([], 100);
+      // h000002 moved from row 3 to row 4 because of the new commit on top.
+      expect(lastFrame()).toContain('4/6');
+      expect(lastFrame()).toContain('atualizado');
+    });
+
+    it('a change reported by the watcher reloads the same way', async () => {
+      const load = vi.fn<LoadGraph>().mockResolvedValue(grown());
+      let notify = () => {};
+      const watch = {
+        subscribe: (listener: () => void) => {
+          notify = listener;
+          return () => {};
+        },
+      };
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} watch={watch} />);
+      await press(stdin, 'j');
+      notify();
+      await tick();
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('3/6');
+      expect(lastFrame()).toContain('o repositório mudou');
+    });
+
+    it('shows the error when the reload fails and keeps the list', async () => {
+      const load = vi.fn<LoadGraph>().mockRejectedValue(new Error('boom'));
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
+      await press(stdin, 'r');
+      await tick();
+      expect(lastFrame()).toContain('erro: boom');
+      expect(lastFrame()).toContain('1/5');
+    });
+  });
+
   describe('search', () => {
     // Subjects (index): 0 fix login, 1 add search, 2 fix cache, 3 docs, 4 fix typo.
     const subjects = ['fix login', 'add search', 'fix cache', 'docs', 'fix typo'];

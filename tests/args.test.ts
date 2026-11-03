@@ -14,6 +14,7 @@ describe('parseCliArgs', () => {
       revs: [],
       paths: [],
       directory: undefined,
+      watch: false,
       mouse: true,
       help: false,
       version: false,
@@ -134,5 +135,12 @@ describe('filtros do log', () => {
 
   it('rejeita --author sem valor', () => {
     expect(() => parseCliArgs(['--author'])).toThrow(UsageError);
+  });
+});
+
+describe('--watch', () => {
+  it('is off by default and on with --watch', () => {
+    expect(parseCliArgs([]).watch).toBe(false);
+    expect(parseCliArgs(['--watch']).watch).toBe(true);
   });
 });

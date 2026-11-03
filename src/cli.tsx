@@ -11,6 +11,7 @@ import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {describeFilters, loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {verifyRevisions} from './git/revs.js';
+import {watchRepository} from './git/watch.js';
 import {enableTerminalMouse} from './terminalMouse.js';
 import {layoutGraph} from './graph/layout.js';
 import {Browser, type LoadGraph} from './ui/Browser.js';
@@ -70,6 +71,7 @@ async function main() {
   const load: LoadGraph = (revs, limit) => graph(revs, limit);
   const initialLimit = options.maxCount ?? DEFAULT_LIMIT;
   const initial = await load(options.revs, initialLimit);
+  const repoWatch = options.watch ? await watchRepository(cwd) : undefined;
   const terminalMouse = options.mouse ? enableTerminalMouse(process.stdin, process.stdout) : undefined;
   try {
     const {waitUntilExit} = render(
@@ -89,6 +91,7 @@ async function main() {
             conflicts: () => conflictedFiles(cwd),
           }}
           mouse={terminalMouse?.source}
+          watch={repoWatch?.source}
         />
       </DisplayContext.Provider>,
       {alternateScreen: true},
@@ -96,6 +99,7 @@ async function main() {
     await waitUntilExit();
   } finally {
     terminalMouse?.dispose();
+    repoWatch?.close();
   }
 }
 

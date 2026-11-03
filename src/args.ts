@@ -20,6 +20,8 @@ export interface CliOptions {
   paths: string[];
   /** `-C <path>`: run as if started in this directory. */
   directory: string | undefined;
+  /** Reload the graph when the repository changes outside the TUI. */
+  watch: boolean;
   /** Enable mouse support (click and wheel) in the TUI. */
   mouse: boolean;
   help: boolean;
@@ -51,6 +53,7 @@ Opções:
       --compact        uma linha por commit, sem a linha de ligação entre eles
       --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
       --no-stash       não mostra os stashes no grafo
+      --watch          recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)
       --no-mouse       desliga o mouse (clique e roda); o terminal volta a selecionar texto
   -h, --help           mostra esta ajuda
   -v, --version        mostra a versão
@@ -83,6 +86,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         compact: {type: 'boolean'},
         order: {type: 'string'},
         'no-stash': {type: 'boolean'},
+        watch: {type: 'boolean'},
         'no-mouse': {type: 'boolean'},
         help: {type: 'boolean', short: 'h'},
         version: {type: 'boolean', short: 'v'},
@@ -120,6 +124,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     revs: positionals,
     paths,
     directory: values.directory,
+    watch: values.watch ?? false,
     mouse: !values['no-mouse'],
     help: values.help ?? false,
     version: values.version ?? false,
