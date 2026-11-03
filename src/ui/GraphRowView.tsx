@@ -31,7 +31,9 @@ interface Props {
 
 // Cada linha é um único <Text> truncado na largura do terminal: o grafo não
 // desalinha e commits longos não quebram em várias linhas.
-export function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false, columnWindow}: Props) {
+// Memoized: a key press moves the cursor, and only the two rows whose `selected` changed need drawing
+// again (the props are stable for the rows that did not change; see the Browser).
+export const GraphRowView = React.memo(function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false, columnWindow}: Props) {
   const display = useDisplay();
   const lines = renderGraphLines(row, row.width, {spaced: display.spaced});
   const {commit} = row;
@@ -64,7 +66,7 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false, mat
       )}
     </Box>
   );
-}
+});
 
 function GraphCells({
   cells,
@@ -82,11 +84,19 @@ function GraphCells({
     ? all.slice(columnWindow.offset * CELLS_PER_COLUMN, (columnWindow.offset + columnWindow.count) * CELLS_PER_COLUMN)
     : all;
   const pad = Math.max(0, (columnWindow?.count ?? graphWidth) * CELLS_PER_COLUMN - shown.length);
+  // Neighbouring cells of the same color go in one <Text>: a wide graph is a handful of runs, not two nodes per column.
+  const runs: {text: string; color: string | undefined}[] = [];
+  for (const cell of shown) {
+    const color = tint(display, laneColor(cell.color, display.lanes));
+    const last = runs.at(-1);
+    if (last && last.color === color) last.text += cell.char;
+    else runs.push({text: cell.char, color});
+  }
   return (
     <>
-      {shown.map((cell, i) => (
-        <Text key={i} color={tint(display, laneColor(cell.color, display.lanes))}>
-          {cell.char}
+      {runs.map((run, i) => (
+        <Text key={i} color={run.color}>
+          {run.text}
         </Text>
       ))}
       {' '.repeat(pad)}

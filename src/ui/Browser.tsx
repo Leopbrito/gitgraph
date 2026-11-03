@@ -24,7 +24,7 @@ import type {RefActions} from '../git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../git/stash.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
-import type {Commit, GraphRow} from '../graph/types.js';
+import type {Commit, GraphRow, Ref} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
 import {CheckoutPrompt} from './CheckoutPrompt.js';
 import {ConfirmPrompt} from './ConfirmPrompt.js';
@@ -104,6 +104,9 @@ const PAN_STEP = 2;
 // Commits moved per wheel notch.
 const WHEEL_STEP = 3;
 
+// One shared array for the commits without refs: a new [] per render would defeat the row memoization.
+const NO_REFS: Ref[] = [];
+
 // Git errors span several lines; the footer has one.
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
@@ -172,6 +175,14 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const visibleCols = visibleColumns(graphWidth, columns);
   const clipped = visibleCols < graphWidth;
   const graphStart = clampOffset(graphOffset, graphWidth, visibleCols);
+  const columnWindow = useMemo(
+    () => (clipped ? {offset: graphStart, count: visibleCols} : undefined),
+    [clipped, graphStart, visibleCols],
+  );
+  // The two possible `head` props of a row, stable between renders (see GraphRowView's memo).
+  const headBranch = data.refs.head.branch;
+  const asHead = useMemo(() => ({isHead: true, branch: headBranch}), [headBranch]);
+  const notHead = useMemo(() => ({isHead: false, branch: headBranch}), [headBranch]);
   const matches = useMemo(() => findMatches(data.rows, query), [data.rows, query]);
   const matchSet = useMemo(() => new Set(matches), [matches]);
   const listHeight = Math.max(3, terminalRows - DETAIL_LINES - CHROME_LINES);
@@ -262,7 +273,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     if (!commit || notACommit('não há o que abrir (use git status e git diff)')) return;
     setViewing(true);
   };
-  const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? [];
+  const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? NO_REFS;
 
   const runCheckout = (target: CheckoutTarget) => {
     setPrompt(null);
@@ -722,10 +733,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     }
   });
 
-  const headOf = (hash: string) => ({
-    isHead: data.refs.head.hash === hash,
-    branch: data.refs.head.branch,
-  });
+  const headOf = (hash: string) => (data.refs.head.hash === hash ? asHead : notHead);
   const arrows = arrowKeys(display);
   const filterLabel =
     revs.length === 0
@@ -815,7 +823,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
             head={headOf(row.commit.hash)}
             selected={offset + i === cursor.selected}
             matched={matchSet.has(offset + i)}
-            columnWindow={clipped ? {offset: graphStart, count: visibleCols} : undefined}
+            columnWindow={columnWindow}
           />
         ))}
       </Box>
