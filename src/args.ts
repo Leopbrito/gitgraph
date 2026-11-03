@@ -86,7 +86,7 @@ const OPTION_DOCS: [flags: string, text: string][] = [
   ['--compact, --no-compact', 'uma linha por commit, sem a linha de ligação entre eles'],
   ['--stash, --no-stash', 'mostra / esconde os stashes no grafo'],
   ['--uncommitted, --no-uncommitted', 'mostra / esconde o nó das alterações não commitadas'],
-  ['--watch, --no-watch', 'recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)'],
+  ['--watch, --no-watch', 'recarrega o grafo sozinho quando commits, refs ou o índice mudam (editar arquivos só aparece com r)'],
   ['--mouse, --no-mouse', 'liga / desliga o mouse (sem ele o terminal volta a selecionar texto)'],
   ['-h, --help', 'mostra esta ajuda'],
   ['-v, --version', 'mostra a versão'],

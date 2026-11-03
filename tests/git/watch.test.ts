@@ -1,3 +1,5 @@
+import {writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {watchRepository} from '../../src/git/watch.js';
 import {createRepo} from './helpers.js';
@@ -34,6 +36,32 @@ describe('watchRepository', () => {
     const branch = events(watch.source, 600);
     r.run('branch', 'feature');
     expect(await branch).toBeGreaterThanOrEqual(1);
+  });
+
+  it.each([
+    ['cherry-pick', ['cherry-pick', 'side']],
+    ['revert', ['revert', '--no-edit', 'HEAD~1']],
+  ])('notices when a stopped %s is dropped with --quit', async (name, args) => {
+    const r = createRepo();
+    cleanups.push(r.cleanup);
+    const write = (text: string) => writeFileSync(join(r.dir, 'a.txt'), `${text}\n`);
+    write('1');
+    r.run('add', 'a.txt');
+    r.run('commit', '-q', '-m', 'base');
+    r.run('checkout', '-q', '-b', 'side');
+    write('2');
+    r.run('commit', '-q', '-am', 'side');
+    r.run('checkout', '-q', 'main');
+    write('3');
+    r.run('commit', '-q', '-am', 'main');
+    // Both conflict and stop, leaving CHERRY_PICK_HEAD / REVERT_HEAD behind.
+    expect(() => r.run(...(args as [string, ...string[]]))).toThrow();
+    const watch = await watchRepository(r.dir, 100);
+    cleanups.push(watch.close);
+
+    const seen = events(watch.source, 300);
+    r.run(name, '--quit');
+    expect(await seen).toBeGreaterThanOrEqual(1);
   });
 
   it('stops after close()', async () => {

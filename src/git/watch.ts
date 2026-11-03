@@ -12,8 +12,22 @@ export interface RepositoryWatch {
   close: () => void;
 }
 
-/** Files in the git directory whose change moves the graph (HEAD, the index, packed refs, a merge). */
-const WATCHED_FILES = new Set(['HEAD', 'index', 'packed-refs', 'MERGE_HEAD']);
+/**
+ * Files in the git directory whose change moves the graph: HEAD, the index, packed refs and the
+ * markers of an operation in progress (see `operationInProgress`). The markers matter because
+ * `--quit` drops them without touching anything else, and the header would keep saying
+ * "em andamento".
+ */
+const WATCHED_FILES = new Set([
+  'HEAD',
+  'index',
+  'packed-refs',
+  'MERGE_HEAD',
+  'CHERRY_PICK_HEAD',
+  'REVERT_HEAD',
+  'rebase-merge',
+  'rebase-apply',
+]);
 
 /** Wait this long after the last change: one git command touches several files. */
 export const DEBOUNCE_MS = 300;
