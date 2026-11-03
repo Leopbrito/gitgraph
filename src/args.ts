@@ -1,4 +1,5 @@
 import {parseArgs} from 'node:util';
+import type {FileConfig} from './config.js';
 import {DATE_STYLES, type DateStyle} from './ui/date.js';
 import {COMMIT_ORDERS, type CommitOrder, type LogFilters} from './git/log.js';
 
@@ -25,6 +26,8 @@ export interface CliOptions {
   directory: string | undefined;
   /** Reload the graph when the repository changes outside the TUI. */
   watch: boolean;
+  /** Colors of the graph lanes from the config file (the built-in palette when absent). */
+  laneColors: string[] | undefined;
   /** Enable mouse support (click and wheel) in the TUI. */
   mouse: boolean;
   help: boolean;
@@ -51,22 +54,33 @@ Opções:
       --no-remotes     esconde as branches remotas
       --no-tags        esconde as tags
   -n, --max-count <n>  mostra no máximo n commits (padrão: sem limite)
-      --no-color       desliga as cores (também vale a variável NO_COLOR)
-      --ascii          usa só caracteres ASCII no grafo
-      --compact        uma linha por commit, sem a linha de ligação entre eles
+      --no-color       desliga as cores (também vale a variável NO_COLOR); --color liga
+      --ascii          usa só caracteres ASCII no grafo (--no-ascii desfaz)
+      --compact        uma linha por commit, sem a linha de ligação entre eles (--no-compact desfaz)
       --date <formato> formato das datas: short (padrão), iso ou relative (há 3 dias)
       --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
-      --no-stash       não mostra os stashes no grafo
+      --no-stash       não mostra os stashes no grafo (--stash mostra)
       --watch          recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)
       --no-mouse       desliga o mouse (clique e roda); o terminal volta a selecionar texto
   -h, --help           mostra esta ajuda
   -v, --version        mostra a versão
 
+Padrões podem ficar em $XDG_CONFIG_HOME/gitgraph/config.json (ou ~/.config/gitgraph/config.json);
+as opções da linha de comando têm precedência sobre o arquivo.
+
 No terminal a interface é interativa (j/k, setas, PgUp/PgDn, g/G, Enter abre os
 arquivos e o diff do commit, s busca commits e n/N navegam pelos resultados, / filtra por branch, q sai). Com a saída redirecionada (pipe), imprime texto puro.
 `;
 
-export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptions {
+/**
+ * `config` is read only when the command line is not just --help/--version, so a broken
+ * config file never blocks them. Precedence: built-in defaults < config file < flags.
+ */
+export function parseCliArgs(
+  argv: string[],
+  env: NodeJS.ProcessEnv = {},
+  config: () => FileConfig = () => ({}),
+): CliOptions {
   // parseArgs does not say where `--` was, and the paths after it are not revisions.
   const dashes = argv.indexOf('--');
   const paths = dashes === -1 ? [] : argv.slice(dashes + 1);
@@ -85,13 +99,19 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         'no-remotes': {type: 'boolean'},
         'no-tags': {type: 'boolean'},
         'max-count': {type: 'string', short: 'n'},
+        color: {type: 'boolean'},
         'no-color': {type: 'boolean'},
         ascii: {type: 'boolean'},
+        'no-ascii': {type: 'boolean'},
         compact: {type: 'boolean'},
+        'no-compact': {type: 'boolean'},
+        stash: {type: 'boolean'},
         order: {type: 'string'},
         date: {type: 'string'},
         'no-stash': {type: 'boolean'},
         watch: {type: 'boolean'},
+        'no-watch': {type: 'boolean'},
+        mouse: {type: 'boolean'},
         'no-mouse': {type: 'boolean'},
         help: {type: 'boolean', short: 'h'},
         version: {type: 'boolean', short: 'v'},
@@ -101,28 +121,36 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     throw new UsageError(translate(error));
   }
 
+  const help = values.help ?? false;
+  const version = values.version ?? false;
+  const file = help || version ? {} : config();
+
   const raw = values['max-count'];
   if (raw !== undefined && !/^[1-9]\d*$/.test(raw)) {
     throw new UsageError(`--max-count deve ser um inteiro positivo (recebido: "${raw}")`);
   }
-  const order = values.order ?? 'date';
+  const order = values.order ?? file.order ?? 'date';
   if (!isCommitOrder(order)) {
     throw new UsageError(
       `--order deve ser ${COMMIT_ORDERS.join(', ')} (recebido: "${order}")`,
     );
   }
-  const date = values.date ?? 'short';
+  const date = values.date ?? file.date ?? 'short';
   if (!isDateStyle(date)) {
     throw new UsageError(`--date deve ser ${DATE_STYLES.join(', ')} (recebido: "${date}")`);
   }
+  // `--x` / `--no-x` pair: the one given wins; if both are, the negative does.
+  const toggle = (name: 'color' | 'ascii' | 'compact' | 'stash' | 'mouse' | 'watch'): boolean | undefined =>
+    values[`no-${name}` as 'no-color'] ? false : values[name] ? true : undefined;
   return {
-    maxCount: raw === undefined ? undefined : Number(raw),
-    color: !values['no-color'] && !env['NO_COLOR'],
-    ascii: values.ascii ?? false,
-    compact: values.compact ?? false,
+    maxCount: raw === undefined ? file.maxCount : Number(raw),
+    // NO_COLOR is a user-wide default, so the config file and the flags may override it.
+    color: toggle('color') ?? file.color ?? !env['NO_COLOR'],
+    ascii: toggle('ascii') ?? file.ascii ?? false,
+    compact: toggle('compact') ?? file.compact ?? false,
     date,
     order,
-    stash: !values['no-stash'],
+    stash: toggle('stash') ?? file.stash ?? true,
     filters: {
       ...(values.author !== undefined && {author: values.author}),
       ...(values.since !== undefined && {since: values.since}),
@@ -134,10 +162,11 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     revs: positionals,
     paths,
     directory: values.directory,
-    watch: values.watch ?? false,
-    mouse: !values['no-mouse'],
-    help: values.help ?? false,
-    version: values.version ?? false,
+    laneColors: file.colors?.lanes,
+    watch: toggle('watch') ?? file.watch ?? false,
+    mouse: toggle('mouse') ?? file.mouse ?? true,
+    help,
+    version,
   };
 }
 

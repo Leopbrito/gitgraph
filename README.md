@@ -58,6 +58,27 @@ gitgraph [opções] [<revisão>...] [-- <caminho>...]
 
 Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como um nó oco (`○`, `o` com `--ascii`) com o rótulo `(stash@{0})`, logo acima do commit em que foi feito; os commits internos que o git cria para o stash (índice e arquivos não rastreados) ficam escondidos. Um stash só aparece se o commit-base estiver na lista (por exemplo, `-n` pode cortá-lo, e um filtro de branch que não inclua o commit-base também). Use `--no-stash` para não mostrá-los.
 
+### Arquivo de configuração
+
+Os padrões podem ficar em `$XDG_CONFIG_HOME/gitgraph/config.json` (ou `~/.config/gitgraph/config.json`). Todas as chaves são opcionais:
+
+```json
+{
+  "order": "date",
+  "date": "relative",
+  "compact": false,
+  "ascii": false,
+  "color": true,
+  "stash": true,
+  "mouse": true,
+  "watch": false,
+  "maxCount": 500,
+  "colors": {"lanes": ["cyan", "magenta", "#ff8800", "greenBright"]}
+}
+```
+
+A precedência é **padrões do programa < arquivo < opções da linha de comando**. Para que uma opção da linha de comando possa desfazer o arquivo, cada opção liga/desliga tem as duas formas: `--compact`/`--no-compact`, `--ascii`/`--no-ascii`, `--color`/`--no-color`, `--stash`/`--no-stash`, `--mouse`/`--no-mouse` e `--watch`/`--no-watch` (se vierem as duas, a negativa vence). A variável `NO_COLOR` fica entre o padrão e o arquivo: o arquivo (`"color": true`) e `--color` a sobrepõem. `colors.lanes` troca as cores das lanes do grafo, usadas em ordem e repetidas (nomes como `red` e `cyanBright`, ou `#rrggbb`). Um arquivo inválido é erro com o nome do arquivo e da chave (uma chave desconhecida também, para um erro de digitação não passar em silêncio); `--help` e `--version` funcionam mesmo assim. **Atalhos de teclado ainda não são configuráveis**: ficam para depois de a tabela de teclas ser única (veja a tela de ajuda).
+
 ### Teclas (modo interativo)
 
 | Tecla | Ação |

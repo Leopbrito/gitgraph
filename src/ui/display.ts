@@ -11,6 +11,8 @@ export interface Display {
   spaced: boolean;
   /** How commit dates are written; `short` when absent. */
   date?: DateStyle;
+  /** Colors of the graph lanes (from the config file); the built-in palette when absent. */
+  lanes?: readonly string[];
 }
 
 export const DisplayContext = createContext<Display>({color: true, ascii: false, spaced: true});

@@ -1,4 +1,6 @@
 import {execFile} from 'node:child_process';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {promisify} from 'node:util';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -9,8 +11,10 @@ const tsx = join(import.meta.dirname, '..', 'node_modules', '.bin', 'tsx');
 const entry = join(import.meta.dirname, '..', 'src', 'cli.tsx');
 
 /** Runs the CLI with stdout piped, so it prints plain text. */
-const gitgraph = (cwd: string, ...args: string[]) =>
-  exec(tsx, [entry, ...args], {cwd, env: {...process.env, NO_COLOR: '1'}}).then(
+const gitgraph = (cwd: string, ...args: string[]) => gitgraphEnv(cwd, {}, ...args);
+
+const gitgraphEnv = (cwd: string, env: Record<string, string>, ...args: string[]) =>
+  exec(tsx, [entry, ...args], {cwd, env: {...process.env, NO_COLOR: '1', ...env}}).then(
     ({stdout}) => ({stdout, code: 0, stderr: ''}),
     (error: {stdout: string; stderr: string; code: number}) => ({stdout: error.stdout, stderr: error.stderr, code: error.code}),
   );
@@ -61,5 +65,43 @@ describe('cli (pipe mode)', () => {
     const missing = await gitgraph(dir, '-C', join(dir, 'missing'));
     expect(missing.code).toBe(2);
     expect(missing.stderr).toContain('não é um diretório');
+  });
+});
+
+describe('cli (config file)', () => {
+  function configDir(content: string) {
+    const root = mkdtempSync(join(tmpdir(), 'gitgraph-config-'));
+    cleanups.push(() => rmSync(root, {recursive: true, force: true}));
+    mkdirSync(join(root, 'gitgraph'));
+    writeFileSync(join(root, 'gitgraph', 'config.json'), content);
+    return root;
+  }
+
+  it('applies the defaults from the file, and a flag overrides them', async () => {
+    const {dir} = repo();
+    const xdg = configDir('{"date": "iso", "maxCount": 1}');
+    const fromFile = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg}, 'main');
+    // One commit (maxCount) with the iso date (has the time).
+    expect(fromFile.stdout.split('\n').filter(line => line.includes('Ana,'))).toHaveLength(1);
+    expect(fromFile.stdout).toMatch(/Ana, \d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+
+    const flags = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg}, 'main', '--date=short', '-n', '2');
+    expect(flags.stdout).toMatch(/Ana, \d{4}-\d{2}-\d{2}\s/);
+    expect(flags.stdout).not.toMatch(/\d{2}:\d{2}/);
+    expect(flags.stdout).toContain('only on main');
+    expect(flags.stdout).toContain('base');
+  });
+
+  it('fails with the file name and key on an invalid config, but still answers --help', async () => {
+    const {dir} = repo();
+    const xdg = configDir('{"order": "newest"}');
+    const bad = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg});
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toContain('config.json');
+    expect(bad.stderr).toContain('"order" deve ser date, author-date, topo');
+
+    const help = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg}, '--help');
+    expect(help.code).toBe(0);
+    expect(help.stdout).toContain('Uso: gitgraph');
   });
 });

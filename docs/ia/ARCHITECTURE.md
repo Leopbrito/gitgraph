@@ -31,6 +31,7 @@ src/
   cli.tsx          # entrada: argumentos, carga dos dados e escolha entre Browser (TTY) e texto puro (pipe)
   terminalMouse.ts # liga/desliga o mouse do terminal (modos 1000/1006) e tira os relatórios do stdin antes do Ink
   clipboard.ts     # copyText(): programa nativo (pbcopy/wl-copy/xclip/xsel/clip) ou OSC 52; osc52() e clipboardCommands() puros
+  config.ts        # config.json (XDG): configPath(), parseConfig() (valida o schema), loadConfig(); FileConfig
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
@@ -166,6 +167,12 @@ Cada entrada do stash é um commit com 2 ou 3 pais: o commit-base e commits inte
 ### Datas
 
 `--date short|iso|relative` (`DateStyle`, em `ui/date.ts`) chega aos componentes por `Display.date` (opcional, `short` quando falta) e a `formatPlain` por `date`. Tudo passa por `formatDate(iso, style, {now, detail})`; `detail` é verdadeiro nos painéis de um commit só (`CommitDetail`, `CommitView`), que têm espaço para a hora: o `short` mostra só o dia na lista e dia e hora nos detalhes, como antes. A data é a do autor no fuso em que foi gravada (o texto ISO do git), sem converter para o fuso local. O relativo usa `Intl.RelativeTimeFormat('pt-BR', {numeric: 'auto'})` (sem dependência) com a unidade maior que cabe; horas e dias são truncados e meses e anos arredondados, como o `git log --date=relative` (90 dias são "3 meses", não "2"). O relógio entra por parâmetro nos testes, mas a TUI não redesenha só porque o tempo passou: o relativo se atualiza em qualquer render (tecla, `r`).
+
+### Arquivo de configuração
+
+`config.ts` lê `$XDG_CONFIG_HOME/gitgraph/config.json` (só se for caminho absoluto, como manda a spec; senão `~/.config`). JSON, sem dependência. `parseConfig` valida com uma tabela chave → regra (`SCHEMA`) e **rejeita chaves desconhecidas**, porque um erro de digitação seria ignorado em silêncio; toda mensagem leva o caminho do arquivo e a chave. Arquivo inexistente não é erro (`ENOENT` → `{}`); outras falhas de leitura são `ConfigError`.
+
+`parseCliArgs(argv, env, config)` recebe o arquivo como **função**, que só roda se a linha de comando não for `--help`/`--version`, então um arquivo quebrado não impede de ler a ajuda. A precedência é padrões < arquivo < flags. Para uma flag poder desfazer o arquivo, cada booleana tem as duas formas (`toggle()` junta o par; a negativa vence se vierem as duas). `NO_COLOR` entra entre o padrão e o arquivo (a spec de no-color.org deixa a configuração do próprio programa sobrepô-lo). `colors.lanes` chega aos componentes por `Display.lanes` e `laneColor(cor, paleta)`; as cores são validadas (`isColor`: nomes do Ink ou `#rrggbb`). Atalhos configuráveis ficaram de fora: dependem de uma tabela única de teclas, que o `Browser` ainda não tem.
 
 ### Opções e erros
 

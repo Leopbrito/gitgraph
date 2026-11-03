@@ -15,6 +15,7 @@ describe('parseCliArgs', () => {
       revs: [],
       paths: [],
       directory: undefined,
+      laneColors: undefined,
       watch: false,
       mouse: true,
       help: false,
@@ -155,5 +156,71 @@ describe('--date', () => {
 
   it('rejects an unknown style', () => {
     expect(() => parseCliArgs(['--date=full'])).toThrow('--date deve ser short, iso, relative');
+  });
+});
+
+describe('arquivo de configuração', () => {
+  const file = {order: 'topo', date: 'iso', compact: true, ascii: true, color: false, stash: false, mouse: false, watch: true, maxCount: 40} as const;
+
+  it('o arquivo vale no lugar dos padrões', () => {
+    const options = parseCliArgs([], {}, () => file);
+    expect(options).toMatchObject({
+      order: 'topo',
+      date: 'iso',
+      compact: true,
+      ascii: true,
+      color: false,
+      stash: false,
+      mouse: false,
+      watch: true,
+      maxCount: 40,
+    });
+  });
+
+  it('as flags vencem o arquivo, inclusive as que desligam', () => {
+    const options = parseCliArgs(
+      ['--order=date', '--date=short', '--no-compact', '--no-ascii', '--color', '--stash', '--mouse', '--no-watch', '-n', '7'],
+      {},
+      () => file,
+    );
+    expect(options).toMatchObject({
+      order: 'date',
+      date: 'short',
+      compact: false,
+      ascii: false,
+      color: true,
+      stash: true,
+      mouse: true,
+      watch: false,
+      maxCount: 7,
+    });
+  });
+
+  it('as flags que ligam também vencem o arquivo, e a negativa ganha se vierem as duas', () => {
+    expect(parseCliArgs(['--compact'], {}, () => ({compact: false})).compact).toBe(true);
+    expect(parseCliArgs(['--compact', '--no-compact']).compact).toBe(false);
+  });
+
+  it('NO_COLOR vale sobre o padrão, mas o arquivo e as flags o sobrepõem', () => {
+    expect(parseCliArgs([], {NO_COLOR: '1'}).color).toBe(false);
+    expect(parseCliArgs([], {NO_COLOR: '1'}, () => ({color: true})).color).toBe(true);
+    expect(parseCliArgs(['--color'], {NO_COLOR: '1'}).color).toBe(true);
+  });
+
+  it('entrega as cores das lanes', () => {
+    expect(parseCliArgs([], {}, () => ({colors: {lanes: ['red', '#00ff00']}})).laneColors).toEqual(['red', '#00ff00']);
+  });
+
+  it('não lê o arquivo para --help nem --version, então um arquivo quebrado não os impede', () => {
+    const broken = () => {
+      throw new Error('arquivo quebrado');
+    };
+    expect(parseCliArgs(['--help'], {}, broken).help).toBe(true);
+    expect(parseCliArgs(['-v'], {}, broken).version).toBe(true);
+    expect(() => parseCliArgs([], {}, broken)).toThrow('arquivo quebrado');
+  });
+
+  it('valida a ordem e a data que vêm do arquivo com a mesma mensagem', () => {
+    expect(() => parseCliArgs([], {}, () => ({order: 'x' as 'topo'}))).toThrow('--order deve ser');
   });
 });

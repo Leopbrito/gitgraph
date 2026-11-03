@@ -3,7 +3,7 @@ import {render} from 'ink-testing-library';
 import {describe, expect, it} from 'vitest';
 import {layoutGraph} from '../../src/graph/layout.js';
 import {DisplayContext} from '../../src/ui/display.js';
-import {GraphRowView} from '../../src/ui/GraphRowView.js';
+import {GraphRowView, laneColor} from '../../src/ui/GraphRowView.js';
 
 const commit = {
   hash: 'abcdef1234567',
@@ -44,5 +44,14 @@ describe('GraphRowView', () => {
     );
     expect(lastFrame()).toContain('*');
     expect(lastFrame()).not.toContain('●');
+  });
+});
+
+describe('laneColor', () => {
+  it('cycles through the palette and takes a custom one', () => {
+    expect(laneColor(0)).toBe('cyan');
+    expect(laneColor(6)).toBe('cyan');
+    expect(laneColor(1, ['red', 'blue'])).toBe('blue');
+    expect(laneColor(2, ['red', 'blue'])).toBe('red');
   });
 });

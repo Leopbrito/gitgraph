@@ -8,6 +8,7 @@ import {HELP, parseCliArgs, UsageError} from './args.js';
 import {gitChanges} from './git/changes.js';
 import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
+import {loadConfig} from './config.js';
 import {copyText} from './clipboard.js';
 import {describeFilters, loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
@@ -23,7 +24,7 @@ import {formatPlain} from './ui/plain.js';
 const DEFAULT_LIMIT = 500;
 
 async function main() {
-  const options = parseCliArgs(process.argv.slice(2), process.env);
+  const options = parseCliArgs(process.argv.slice(2), process.env, () => loadConfig(process.env));
   if (options.help) {
     process.stdout.write(HELP);
     return;
@@ -76,7 +77,7 @@ async function main() {
   const terminalMouse = options.mouse ? enableTerminalMouse(process.stdin, process.stdout) : undefined;
   try {
     const {waitUntilExit} = render(
-      <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact, date: options.date}}>
+      <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact, date: options.date, lanes: options.laneColors}}>
         <Browser
           initial={initial}
           initialLimit={initialLimit}

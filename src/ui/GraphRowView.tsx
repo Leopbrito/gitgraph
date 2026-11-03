@@ -12,7 +12,8 @@ import {tint, useDisplay} from './display.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
 const PALETTE = ['cyan', 'magenta', 'yellow', 'green', 'blue', 'red'] as const;
-export const laneColor = (color: number) => PALETTE[color % PALETTE.length];
+export const laneColor = (color: number, palette: readonly string[] = PALETTE): string | undefined =>
+  palette[color % palette.length];
 
 interface Props {
   row: GraphRow;
@@ -67,7 +68,7 @@ function GraphCells({cells, graphWidth}: {cells: Cell[]; graphWidth: number}) {
   return (
     <>
       {shown.map((cell, i) => (
-        <Text key={i} color={tint(display, laneColor(cell.color))}>
+        <Text key={i} color={tint(display, laneColor(cell.color, display.lanes))}>
           {cell.char}
         </Text>
       ))}
