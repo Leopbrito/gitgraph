@@ -16,7 +16,7 @@ export interface RepositoryWatch {
  * Files in the git directory whose change moves the graph: HEAD, the index, packed refs and the
  * markers of an operation in progress (see `operationInProgress`). The markers matter because
  * `--quit` drops them without touching anything else, and the header would keep saying
- * "em andamento".
+ * "in progress".
  */
 const WATCHED_FILES = new Set([
   'HEAD',
@@ -43,7 +43,7 @@ export async function watchRepository(cwd: string, debounceMs = DEBOUNCE_MS): Pr
   )
     .trim()
     .split('\n');
-  if (!gitDir || !commonDir) throw new Error('não foi possível localizar o diretório .git');
+  if (!gitDir || !commonDir) throw new Error('could not find the .git directory');
 
   const listeners = new Set<() => void>();
   let timer: NodeJS.Timeout | undefined;

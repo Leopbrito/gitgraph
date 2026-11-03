@@ -43,19 +43,19 @@ export interface LogFilters {
 /** Short labels of the active filters, for the status bar. */
 export function describeFilters(f: LogFilters): string[] {
   return [
-    ...(f.author !== undefined ? [`autor ${f.author}`] : []),
-    ...(f.since !== undefined ? [`desde ${f.since}`] : []),
-    ...(f.until !== undefined ? [`até ${f.until}`] : []),
-    ...(f.firstParent ? ['primeiro pai'] : []),
-    ...(f.hideRemotes ? ['sem remotas'] : []),
-    ...(f.hideTags ? ['sem tags'] : []),
+    ...(f.author !== undefined ? [`author ${f.author}`] : []),
+    ...(f.since !== undefined ? [`since ${f.since}`] : []),
+    ...(f.until !== undefined ? [`until ${f.until}`] : []),
+    ...(f.firstParent ? ['first parent'] : []),
+    ...(f.hideRemotes ? ['no remotes'] : []),
+    ...(f.hideTags ? ['no tags'] : []),
   ];
 }
 
 export interface LogOptions extends LogFilters {
-  /** Inclui todas as refs (branches, tags, remotos), menos o stash, não só HEAD. */
+  /** Includes every ref (branches, tags, remotes) except the stash, not just HEAD. */
   all?: boolean;
-  /** Revisões de partida (ex.: uma branch); ignorado com `all`. Sem nenhuma, usa HEAD. */
+  /** Revisions to start from (e.g. a branch); ignored with `all`. With none, HEAD is used. */
   revs?: string[];
   maxCount?: number;
   /** Only commits that touched these paths (history is simplified; parents are rewritten). */
@@ -84,7 +84,7 @@ function logArgs(
   // With paths, git drops the commits that did not touch them; --parents makes %P show the
   // surviving parents instead of the original ones, so the layout does not wait for lost commits.
   if (paths.length > 0) args.push('--parents');
-  // O stash guarda commits internos (index, untracked) que poluiriam o grafo.
+  // The stash keeps internal commits (index, untracked) that would clutter the graph.
   if (all && (filters.hideRemotes || filters.hideTags)) {
     // `--all` has no way to leave a kind of ref out: list the kinds that stay (HEAD covers a detached one).
     args.push('--branches', ...(filters.hideTags ? [] : ['--tags']), ...(filters.hideRemotes ? [] : ['--remotes']), 'HEAD');
@@ -95,7 +95,7 @@ function logArgs(
   if (filters.until !== undefined) args.push(`--until=${filters.until}`);
   if (filters.firstParent) args.push('--first-parent');
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
-  // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.
+  // Separates revisions from paths: a branch named like a file does not confuse git.
   args.push('--', ...paths);
   return args;
 }
@@ -117,7 +117,7 @@ async function* streamLog(args: string[], cwd: string): AsyncGenerator<Commit, v
     }
   }
   if (fields.length > 0 || pending !== '') {
-    throw new Error(`Registro de commit inválido: ${JSON.stringify(fields.join('\0') + pending)}`);
+    throw new Error(`Invalid commit record: ${JSON.stringify(fields.join('\0') + pending)}`);
   }
 }
 
@@ -147,7 +147,7 @@ export async function* streamCommits(
       yield commit;
     }
   } catch (error) {
-    // Repositório recém-criado, sem commits: não é erro.
+    // A freshly created repository, with no commits: not an error.
     if (error instanceof Error && /does not have any commits/.test(error.message)) return;
     throw error;
   }

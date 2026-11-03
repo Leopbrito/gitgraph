@@ -3,7 +3,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
-/** Cria um repositório git temporário e devolve o caminho e uma função de limpeza. */
+/** Creates a temporary git repository and returns its path and a cleanup function. */
 export function createRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'gitgraph-test-'));
   const run = (...args: string[]) =>

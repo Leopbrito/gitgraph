@@ -130,7 +130,7 @@ describe('merge', () => {
       const failure = merge(dir, feature);
       await expect(failure).rejects.toBeInstanceOf(MergeConflictError);
       await expect(failure).rejects.toMatchObject({files: ['a.txt']});
-      await expect(failure).rejects.toThrow('conflitos em a.txt');
+      await expect(failure).rejects.toThrow('conflicts in a.txt');
       expect(await mergeInProgress(dir)).toBe(true);
       expect(await conflictedFiles(dir)).toEqual(['a.txt']);
     });

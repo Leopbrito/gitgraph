@@ -23,8 +23,8 @@ export function git(args: string[], cwd: string, {network = false, env}: GitOpti
       {
         cwd,
         maxBuffer: 256 * 1024 * 1024,
-        // Mensagens de erro em inglês, para o código poder reconhecê-las em
-        // qualquer idioma do sistema.
+        // English error messages, so the code can recognize them in
+        // any system language.
         env: {...process.env, LC_ALL: 'C', ...(network ? {GIT_TERMINAL_PROMPT: '0'} : {}), ...env},
         ...(network ? {detached: true, timeout: NETWORK_TIMEOUT_MS} : {}),
       },
@@ -78,13 +78,13 @@ function describeError(
   stderr: string,
   cwd: string,
 ): Error {
-  if (error.code === 'ENOENT') return new Error('git não encontrado no PATH');
-  if (error.killed) return new Error('tempo esgotado ao falar com a remota');
+  if (error.code === 'ENOENT') return new Error('git not found in PATH');
+  if (error.killed) return new Error('timed out talking to the remote');
   if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-    return new Error('a saída do git é grande demais; limite o histórico com -n ou um caminho');
+    return new Error('git output is too large; limit the history with -n or a path');
   }
   if (/not a git repository/i.test(stderr)) {
-    return new Error(`${cwd} não é um repositório git`);
+    return new Error(`${cwd} is not a git repository`);
   }
   return new Error(stderr.trim() || error.message);
 }

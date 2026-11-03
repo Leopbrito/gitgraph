@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {localBranchTips, parseRefs} from '../../src/git/refs.js';
 
 describe('parseRefs', () => {
-  it('agrupa branches, remotos e tags por commit', () => {
+  it('groups branches, remotes and tags by commit', () => {
     const text = [
       'h1\0\0refs/heads/main',
       'h1\0\0refs/remotes/origin/main',

@@ -22,10 +22,10 @@ describe('validate', () => {
     expect(await actions.validate('branch', 'feature/login')).toBeNull();
     expect(await actions.validate('tag', 'v2.0')).toBeNull();
     for (const bad of ['has space', 'a..b', 'x~1', 'a:b', 'end.lock', '-dash', 'HEAD', '@{', '/lead']) {
-      expect(await actions.validate('branch', bad), bad).toMatch(/não é um nome válido/);
+      expect(await actions.validate('branch', bad), bad).toMatch(/is not a valid name/);
     }
-    expect(await actions.validate('branch', 'main')).toBe('já existe uma branch chamada main');
-    expect(await actions.validate('tag', 'v1')).toBe('já existe uma tag chamada v1');
+    expect(await actions.validate('branch', 'main')).toBe('a branch named main already exists');
+    expect(await actions.validate('tag', 'v1')).toBe('a tag named v1 already exists');
     // A branch and a tag may share a name.
     expect(await actions.validate('tag', 'main')).toBeNull();
   });
@@ -87,7 +87,7 @@ describe('rename', () => {
   it('refuses to rename a signed tag, which would lose its signature', async () => {
     const {actions, run, first} = repo();
     run('tag', '-a', 'signed', '-m', 'msg\n-----BEGIN PGP SIGNATURE-----\nabc\n-----END PGP SIGNATURE-----', first);
-    await expect(actions.renameTag('signed', 'renamed')).rejects.toThrow(/assinada/);
+    await expect(actions.renameTag('signed', 'renamed')).rejects.toThrow(/is signed/);
     expect(run('tag', '--list')).toBe('signed');
   });
 

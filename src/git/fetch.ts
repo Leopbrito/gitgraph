@@ -15,7 +15,7 @@ export async function fetchAll(cwd: string): Promise<void> {
     const raw = error instanceof Error ? error.message : String(error);
     const reason = summarizeGitError(raw);
     throw new Error(
-      AUTH.test(raw) ? `${reason} (as credenciais precisam estar disponíveis sem prompt: ssh-agent ou credential helper)` : reason,
+      AUTH.test(raw) ? `${reason} (the credentials must be available without a prompt: ssh-agent or a credential helper)` : reason,
     );
   }
 }

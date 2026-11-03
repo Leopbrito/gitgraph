@@ -38,7 +38,7 @@ export class StashConflictError extends Error {
     readonly name: string,
     readonly files: string[],
   ) {
-    super(`conflitos ao aplicar ${name} em ${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}`);
+    super(`conflicts applying ${name} in ${files.length} ${files.length === 1 ? 'file' : 'files'}`);
   }
 }
 
@@ -55,7 +55,7 @@ const BLOCKED = /would be overwritten|already exists, no checkout|Please commit 
  */
 export async function runStash(cwd: string, op: StashOp, hash: string): Promise<string> {
   const entry = (await loadStashes(cwd)).find(e => e.hash === hash);
-  if (!entry) throw new Error('esse stash não existe mais (foi aplicado ou apagado em outro lugar); aperte r');
+  if (!entry) throw new Error('that stash no longer exists (it was applied or dropped elsewhere); press r');
   try {
     await git(['stash', op, entry.name], cwd);
   } catch (error) {
@@ -65,7 +65,7 @@ export async function runStash(cwd: string, op: StashOp, hash: string): Promise<
     }
     const message = error instanceof Error ? error.message : String(error);
     if (BLOCKED.test(message)) {
-      throw new Error(`as alterações locais atrapalham: faça commit ou stash delas antes de ${op === 'pop' ? 'dar pop' : 'aplicar'} ${entry.name}`);
+      throw new Error(`local changes are in the way: commit or stash them before ${op === 'pop' ? 'popping' : 'applying'} ${entry.name}`);
     }
     throw error;
   }

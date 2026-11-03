@@ -5,7 +5,7 @@ export type RefKindEditable = 'branch' | 'tag';
 /** `git branch -d` refused: the branch has commits no other ref has. */
 export class UnmergedBranchError extends Error {
   constructor(readonly branch: string) {
-    super(`a branch ${branch} não foi mesclada`);
+    super(`the branch ${branch} is not merged`);
   }
 }
 
@@ -35,13 +35,13 @@ export function gitRefActions(cwd: string): RefActions {
     );
   return {
     async validate(kind, name) {
-      if (name === 'HEAD' || name.startsWith('-')) return `"${name}" não é um nome válido`;
+      if (name === 'HEAD' || name.startsWith('-')) return `"${name}" is not a valid name`;
       const valid = await git(['check-ref-format', kind === 'branch' ? '--branch' : fullName(kind, name), ...(kind === 'branch' ? [name] : [])], cwd).then(
         () => true,
         () => false,
       );
-      if (!valid) return `"${name}" não é um nome válido (sem espaços, "..", "~", "^", ":" nem terminar em ".lock")`;
-      if (await exists(fullName(kind, name))) return `já existe ${kind === 'branch' ? 'uma branch' : 'uma tag'} chamada ${name}`;
+      if (!valid) return `"${name}" is not a valid name (no spaces, "..", "~", "^", ":", and it cannot end in ".lock")`;
+      if (await exists(fullName(kind, name))) return `${kind === 'branch' ? 'a branch' : 'a tag'} named ${name} already exists`;
       return null;
     },
     async createBranch(name, hash) {
@@ -68,7 +68,7 @@ export function gitRefActions(cwd: string): RefActions {
         // An annotated tag records its own name, so a second ref to the same tag object would be
         // "externally known as" the old name (git warns). Make a new tag object with the same message
         // and tagger instead. A signature covers the name, so it cannot be carried over.
-        if (signature.trim() !== '') throw new Error(`a tag ${from} é assinada: renomear perderia a assinatura; recrie-a no terminal`);
+        if (signature.trim() !== '') throw new Error(`the tag ${from} is signed: renaming would lose the signature; recreate it in the terminal`);
         const message = body.trim() === '' ? subject.trim() : `${subject.trim()}\n\n${body.trim()}`;
         const tagger = {GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email.replace(/^<|>$/g, ''), GIT_COMMITTER_DATE: date};
         await git(['tag', '-a', '-m', message, '--', to, target], cwd, {env: tagger});

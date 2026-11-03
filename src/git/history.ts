@@ -21,7 +21,7 @@ export class OperationStoppedError extends Error {
     readonly operation: Operation,
     readonly files: string[],
   ) {
-    super(files.length > 0 ? `conflitos em ${files.join(', ')}` : `${operation} parado`);
+    super(files.length > 0 ? `conflicts in ${files.join(', ')}` : `${operation} stopped`);
   }
 }
 

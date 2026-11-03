@@ -39,7 +39,7 @@ export function describeMergeTarget(target: MergeTarget): string {
 /** The merge stopped on conflicts and is still in progress in the repository. */
 export class MergeConflictError extends Error {
   constructor(readonly files: string[]) {
-    super(files.length > 0 ? `conflitos em ${files.join(', ')}` : 'merge em andamento');
+    super(files.length > 0 ? `conflicts in ${files.join(', ')}` : 'merge in progress');
   }
 }
 

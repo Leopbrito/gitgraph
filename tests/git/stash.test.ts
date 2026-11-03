@@ -102,7 +102,7 @@ describe('runStash', () => {
   it('fails instead of touching another stash when this one is gone', async () => {
     const {dir, run, hash} = stashed();
     run('stash', 'drop', '-q');
-    await expect(runStash(dir, 'pop', hash)).rejects.toThrow('esse stash não existe mais');
+    await expect(runStash(dir, 'pop', hash)).rejects.toThrow('that stash no longer exists');
   });
 
   it('throws StashConflictError on conflicts, keeps the stash and lists the files', async () => {
@@ -113,7 +113,7 @@ describe('runStash', () => {
     const error = await runStash(dir, 'pop', hash).catch(e => e as Error);
     expect(error).toBeInstanceOf(StashConflictError);
     expect((error as StashConflictError).files).toEqual(['a.txt']);
-    expect((error as StashConflictError).message).toBe('conflitos ao aplicar stash@{0} em 1 arquivo');
+    expect((error as StashConflictError).message).toBe('conflicts applying stash@{0} in 1 file');
     expect(run('stash', 'list')).toContain('wip');
     expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toContain('<<<<<<<');
   });
@@ -123,7 +123,7 @@ describe('runStash', () => {
     writeFileSync(join(dir, 'a.txt'), 'dirty\n');
     const error = await runStash(dir, 'apply', hash).catch(e => e as Error);
     expect(error).not.toBeInstanceOf(StashConflictError);
-    expect((error as Error).message).toContain('as alterações locais atrapalham');
+    expect((error as Error).message).toContain('local changes are in the way');
     expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('dirty\n');
     expect(run('stash', 'list')).toContain('wip');
   });

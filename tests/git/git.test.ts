@@ -15,8 +15,8 @@ function repo() {
   return r;
 }
 
-describe('repositório vazio', () => {
-  it('não tem commits nem HEAD', async () => {
+describe('empty repository', () => {
+  it('has no commits and no HEAD', async () => {
     const {dir} = repo();
     expect(await loadCommits(dir)).toEqual([]);
     const refs = await loadRefs(dir);
@@ -38,39 +38,39 @@ describe('loadRefs with state the caller already has', () => {
   });
 });
 
-describe('mensagens com caracteres de controle', () => {
-  it('carrega commits cujo corpo tem RS, US e SOH', async () => {
+describe('messages with control characters', () => {
+  it('loads commits whose body has RS, US and SOH', async () => {
     const {dir, run} = repo();
-    run('commit', '--allow-empty', '-q', '-m', 'primeiro', '-m', 'corpo com \x1e RS, \x1f US e \x01 SOH');
-    run('commit', '--allow-empty', '-q', '-m', 'segundo');
+    run('commit', '--allow-empty', '-q', '-m', 'first', '-m', 'body with \x1e RS, \x1f US and \x01 SOH');
+    run('commit', '--allow-empty', '-q', '-m', 'second');
     const commits = await loadCommits(dir);
-    expect(commits.map(c => c.subject)).toEqual(['segundo', 'primeiro']);
-    expect(commits[1]?.body).toBe('corpo com \x1e RS, \x1f US e \x01 SOH');
+    expect(commits.map(c => c.subject)).toEqual(['second', 'first']);
+    expect(commits[1]?.body).toBe('body with \x1e RS, \x1f US and \x01 SOH');
   });
 });
 
-describe('repositório com branch e merge', () => {
-  it('lê commits, pais e refs', async () => {
+describe('repository with a branch and a merge', () => {
+  it('reads commits, parents and refs', async () => {
     const {dir, run} = repo();
     run('commit', '--allow-empty', '-q', '-m', 'base');
     run('checkout', '-q', '-b', 'feature');
-    run('commit', '--allow-empty', '-q', '-m', 'na feature', '-m', 'detalhe');
+    run('commit', '--allow-empty', '-q', '-m', 'na feature', '-m', 'detail');
     run('checkout', '-q', 'main');
     run('commit', '--allow-empty', '-q', '-m', 'na main');
     run('merge', '--no-ff', '-q', '-m', 'merge feature', 'feature');
-    run('tag', '-a', 'v1', '-m', 'versão 1');
+    run('tag', '-a', 'v1', '-m', 'version 1');
 
     const commits = await loadCommits(dir);
     const subjects = commits.map(c => c.subject);
-    // topo-order: merge antes dos pais e base por último; a ordem entre
-    // os dois commits paralelos não é especificada.
+    // topo-order: merge before the parents and base last; the order between
+    // the two parallel commits is not specified.
     expect(subjects[0]).toBe('merge feature');
     expect(subjects[3]).toBe('base');
     expect(subjects.slice(1, 3).sort()).toEqual(['na feature', 'na main']);
     const feature = commits.find(c => c.subject === 'na feature')!;
     expect(commits[0]?.parents).toHaveLength(2);
     expect(commits[3]?.parents).toEqual([]);
-    expect(feature.body).toBe('detalhe');
+    expect(feature.body).toBe('detail');
     expect(commits[0]?.author).toBe('Ana');
 
     const refs = await loadRefs(dir);
@@ -87,10 +87,10 @@ describe('repositório com branch e merge', () => {
     ]);
   });
 
-  it('respeita --all e max-count', async () => {
+  it('respects --all and max-count', async () => {
     const {dir, run} = repo();
     run('commit', '--allow-empty', '-q', '-m', 'a');
-    run('checkout', '-q', '-b', 'outra');
+    run('checkout', '-q', '-b', 'other');
     run('commit', '--allow-empty', '-q', '-m', 'b');
     run('checkout', '-q', 'main');
     expect(await loadCommits(dir)).toHaveLength(1);
@@ -98,38 +98,38 @@ describe('repositório com branch e merge', () => {
     expect(await loadCommits(dir, {all: true, maxCount: 1})).toHaveLength(1);
   });
 
-  it('filtra por revisão (branch)', async () => {
+  it('filters by revision (branch)', async () => {
     const {dir, run} = repo();
     run('commit', '--allow-empty', '-q', '-m', 'base');
     run('checkout', '-q', '-b', 'feature');
-    run('commit', '--allow-empty', '-q', '-m', 'só na feature');
+    run('commit', '--allow-empty', '-q', '-m', 'only on feature');
     run('checkout', '-q', 'main');
-    run('commit', '--allow-empty', '-q', '-m', 'só na main');
+    run('commit', '--allow-empty', '-q', '-m', 'only on main');
     const main = await loadCommits(dir, {revs: ['main']});
-    expect(main.map(c => c.subject)).toEqual(['só na main', 'base']);
+    expect(main.map(c => c.subject)).toEqual(['only on main', 'base']);
     const feature = await loadCommits(dir, {revs: ['feature']});
-    expect(feature.map(c => c.subject)).toEqual(['só na feature', 'base']);
+    expect(feature.map(c => c.subject)).toEqual(['only on feature', 'base']);
   });
 
-  it('não inclui os commits internos do stash com --all', async () => {
+  it('does not include the stash internal commits with --all', async () => {
     const {dir, run} = repo();
     writeFileSync(join(dir, 'a.txt'), 'um');
     run('add', 'a.txt');
-    run('commit', '-q', '-m', 'com arquivo');
-    writeFileSync(join(dir, 'a.txt'), 'dois');
-    run('stash', 'push', '-q', '-m', 'trabalho em andamento');
-    // O stash existe e traz commits extras para o git log --all comum.
+    run('commit', '-q', '-m', 'with a file');
+    writeFileSync(join(dir, 'a.txt'), 'two');
+    run('stash', 'push', '-q', '-m', 'work in progress');
+    // The stash exists and brings extra commits to a plain git log --all.
     expect(run('rev-list', '--all', '--count')).not.toBe('1');
     const commits = await loadCommits(dir, {all: true});
-    expect(commits.map(c => c.subject)).toEqual(['com arquivo']);
+    expect(commits.map(c => c.subject)).toEqual(['with a file']);
   });
 
-  it('preserva acentos no assunto, no corpo e no autor', async () => {
+  it('preserves non-ASCII text in the subject and the body', async () => {
     const {dir, run} = repo();
-    run('commit', '--allow-empty', '-q', '-m', 'Corrige ação inválida', '-m', 'Descrição: não quebra');
+    run('commit', '--allow-empty', '-q', '-m', 'Fix naïve café ☕ handling', '-m', 'Détails: ne casse pas — ünïcode');
     const [commit] = await loadCommits(dir);
-    expect(commit?.subject).toBe('Corrige ação inválida');
-    expect(commit?.body).toBe('Descrição: não quebra');
+    expect(commit?.subject).toBe('Fix naïve café ☕ handling');
+    expect(commit?.body).toBe('Détails: ne casse pas — ünïcode');
   });
 
   describe('commit ordering', () => {

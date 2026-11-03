@@ -20,7 +20,7 @@ export function parseAheadBehind(text: string): {ahead: number; behind: number} 
 }
 
 export interface RefInfo {
-  /** Refs agrupadas pelo hash do commit apontado. */
+  /** Refs grouped by the hash of the commit they point at. */
   byCommit: Map<string, Ref[]>;
   /** Names in `git remote`; tells `origin/feature/x` (remote `origin`) from a remote called `origin/feature`. */
   remotes?: string[];
@@ -40,7 +40,7 @@ export interface RefInfo {
 
 const FORMAT = '%(objectname)%00%(*objectname)%00%(refname)';
 
-/** Interpreta a saída de `git for-each-ref` no formato FORMAT. */
+/** Parses the output of `git for-each-ref` in the FORMAT format. */
 export function parseRefs(text: string): Map<string, Ref[]> {
   const byCommit = new Map<string, Ref[]>();
   for (const line of text.split('\n')) {
@@ -49,7 +49,7 @@ export function parseRefs(text: string): Map<string, Ref[]> {
     if (!object || !fullName) continue;
     const ref = toRef(fullName);
     if (!ref) continue;
-    // Tags anotadas apontam para o objeto tag; `*objectname` é o commit.
+    // Annotated tags point at the tag object; `*objectname` is the commit.
     const hash = peeled || object;
     const list = byCommit.get(hash) ?? [];
     list.push(ref);
@@ -67,7 +67,7 @@ function toRef(fullName: string): Ref | null {
   for (const [prefix, kind] of kinds) {
     if (!fullName.startsWith(prefix)) continue;
     const name = fullName.slice(prefix.length);
-    // refs/remotes/origin/HEAD é só um ponteiro simbólico.
+    // refs/remotes/origin/HEAD is just a symbolic pointer.
     if (kind === 'remote' && name.endsWith('/HEAD')) return null;
     return {name, kind};
   }

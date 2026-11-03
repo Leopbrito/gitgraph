@@ -92,10 +92,10 @@ describe('describeFilters', () => {
   it('lists only the active filters', () => {
     expect(describeFilters({})).toEqual([]);
     expect(describeFilters({author: 'Ana', since: '1 week ago', firstParent: true, hideTags: true})).toEqual([
-      'autor Ana',
-      'desde 1 week ago',
-      'primeiro pai',
-      'sem tags',
+      'author Ana',
+      'since 1 week ago',
+      'first parent',
+      'no tags',
     ]);
   });
 });
