@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import {statSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {resolve} from 'node:path';
 import React from 'react';
 import {render} from 'ink';
 import {HELP, parseCliArgs, UsageError} from './args.js';
@@ -8,6 +10,7 @@ import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
+import {verifyRevisions} from './git/revs.js';
 import {enableTerminalMouse} from './terminalMouse.js';
 import {layoutGraph} from './graph/layout.js';
 import {Browser, type LoadGraph} from './ui/Browser.js';
@@ -29,15 +32,19 @@ async function main() {
     return;
   }
 
-  const cwd = process.cwd();
+  const cwd = resolve(options.directory ?? process.cwd());
+  if (options.directory !== undefined && !statSync(cwd, {throwIfNoEntry: false})?.isDirectory()) {
+    throw new UsageError(`-C: ${options.directory} não é um diretório`);
+  }
+  await verifyRevisions(cwd, options.revs);
   // Refs are read on every load: after a checkout, HEAD has moved.
   const graph = async (revs: string[], maxCount: number | undefined) => {
     const [commits, refs] = await Promise.all([
       loadCommits(
         cwd,
         revs.length === 0
-          ? {all: true, maxCount, order: options.order, stashes: options.stash}
-          : {revs, maxCount, order: options.order, stashes: options.stash},
+          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash}
+          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash},
       ),
       loadRefs(cwd),
     ]);
@@ -46,7 +53,7 @@ async function main() {
 
   // Sem TTY (pipe/redirecionamento) a saída é texto puro e completa, como o `git log`.
   if (!process.stdout.isTTY) {
-    const {rows, refs} = await graph([], options.maxCount);
+    const {rows, refs} = await graph(options.revs, options.maxCount);
     if (rows.length === 0) {
       console.error('gitgraph: o repositório não tem commits');
       return;
@@ -62,7 +69,7 @@ async function main() {
 
   const load: LoadGraph = (revs, limit) => graph(revs, limit);
   const initialLimit = options.maxCount ?? DEFAULT_LIMIT;
-  const initial = await load([], initialLimit);
+  const initial = await load(options.revs, initialLimit);
   const terminalMouse = options.mouse ? enableTerminalMouse(process.stdin, process.stdout) : undefined;
   try {
     const {waitUntilExit} = render(
@@ -70,6 +77,7 @@ async function main() {
         <Browser
           initial={initial}
           initialLimit={initialLimit}
+          initialRevs={options.revs}
           maxCommits={options.maxCount}
           load={load}
           checkout={target => checkout(cwd, target)}

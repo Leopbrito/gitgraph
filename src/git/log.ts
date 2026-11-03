@@ -31,6 +31,8 @@ export interface LogOptions {
   /** Revisões de partida (ex.: uma branch); ignorado com `all`. Sem nenhuma, usa HEAD. */
   revs?: string[];
   maxCount?: number;
+  /** Only commits that touched these paths (history is simplified; parents are rewritten). */
+  paths?: string[];
   /** Commit ordering; defaults to `date`. */
   order?: CommitOrder;
   /**
@@ -42,15 +44,18 @@ export interface LogOptions {
 
 export async function loadCommits(
   cwd: string,
-  {all = false, revs = [], maxCount, order = 'date', stashes = false}: LogOptions = {},
+  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false}: LogOptions = {},
 ): Promise<Commit[]> {
   const args = ['log', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
+  // With paths, git drops the commits that did not touch them; --parents makes %P show the
+  // surviving parents instead of the original ones, so the layout does not wait for lost commits.
+  if (paths.length > 0) args.push('--parents');
   // O stash guarda commits internos (index, untracked) que poluiriam o grafo.
   if (all) args.push('--exclude=refs/stash', '--all');
   else args.push(...revs);
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
   // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.
-  args.push('--');
+  args.push('--', ...paths);
   try {
     const commits = parseLog(await git(args, cwd));
     return stashes ? await withStashes(cwd, commits) : commits;

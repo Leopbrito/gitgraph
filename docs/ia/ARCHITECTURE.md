@@ -33,7 +33,8 @@ src/
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
-    log.ts         # loadCommits(): git log -> Commit[] (all/revs/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
+    revs.ts        # verifyRevisions()/revisionNames(): valida as revisões da linha de comando (`rev-parse --verify`)
+    log.ts         # loadCommits(): git log -> Commit[] (all/revs/paths/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
@@ -139,6 +140,10 @@ O cabeçalho mostra `atual: <branch>` (`headLabel`, em `format.ts`), vindo de `R
 ### Stashes
 
 Cada entrada do stash é um commit com 2 ou 3 pais: o commit-base e commits internos (índice e, com `-u`, arquivos não rastreados). Por isso o `--all` exclui `refs/stash`. Com `loadCommits({stashes: true})`, `withStashes` (em `log.ts`) lê as entradas (`loadStashes`) e insere cada uma como **um nó** (`Commit.stash = true`) com **só o commit-base como pai**, logo **acima do commit-base** e não na data: assim não abre uma lane longa do topo até a base, e as linhas já mostradas não se deslocam quando mais histórico é carregado. Vários stashes na mesma base ficam empilhados, do mais novo para o mais antigo. Um stash cuja base não está na lista (`-n`, filtro de branch) é omitido. Falhas ao ler o stash viram "sem stashes" para não derrubar o grafo. `loadRefs` etiqueta cada commit de stash com `{kind: 'stash', name: 'stash@{n}'}`; stash não é branch, então não entra em `branchNames` nem em `localBranchTips`. O desenho usa um nó oco (`○`, `o` em ASCII) e o rótulo em magenta. No `Browser`, `c` numa linha de stash só mostra um aviso: um commit de stash não é uma linha de história. `--no-stash` desliga tudo isso.
+
+### Revisões, caminhos e -C
+
+`parseCliArgs` separa o argv no primeiro `--` (o `util.parseArgs` não diz onde ele estava): antes dele, os posicionais são `revs`; depois, `paths`. `-C <caminho>` (`directory`) vira o `cwd` de todas as chamadas ao git; `cli.tsx` o resolve e recusa o que não é diretório (código 2). As revisões são validadas antes de tudo por `verifyRevisions` (`rev-parse --verify --quiet`, aceitando `a..b`, `a...b` e `^a` por `revisionNames`), para o erro dizer qual nome está errado e sugerir `--`. Sem `revs`, o log usa `--all` (sem o stash); com `revs`, usa `git log <revs> -- <paths>`. Na TUI as `revs` iniciais são o filtro de branch (`Browser.initialRevs`); no pipe valem direto. Com `paths` o log leva `--parents`: sem isso o `%P` mostra os pais originais, que a poda do histórico removeu, e o layout deixaria lanes esperando commits que nunca chegam.
 
 ### Opções e erros
 

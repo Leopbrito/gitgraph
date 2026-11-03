@@ -12,6 +12,12 @@ export interface CliOptions {
   order: CommitOrder;
   /** Show the stash entries in the graph. */
   stash: boolean;
+  /** Revisions to start from (branches, tags, hashes, ranges); empty means all refs. */
+  revs: string[];
+  /** Paths that limit the history (everything after `--`). */
+  paths: string[];
+  /** `-C <path>`: run as if started in this directory. */
+  directory: string | undefined;
   /** Enable mouse support (click and wheel) in the TUI. */
   mouse: boolean;
   help: boolean;
@@ -23,9 +29,14 @@ export class UsageError extends Error {}
 
 export const HELP = `gitgraph: mostra o grafo de branches do repositório git atual no terminal.
 
-Uso: gitgraph [opções]
+Uso: gitgraph [opções] [<revisão>...] [-- <caminho>...]
+
+Sem revisões mostra todas as branches, remotas e tags. Com revisões (main, feature-x,
+v1.0..main, um hash) mostra só o que é alcançável delas; após -- limita o histórico
+a commits que mexeram nos caminhos.
 
 Opções:
+  -C <caminho>         abre o repositório de outro diretório, sem precisar de cd
   -n, --max-count <n>  mostra no máximo n commits (padrão: sem limite)
       --no-color       desliga as cores (também vale a variável NO_COLOR)
       --ascii          usa só caracteres ASCII no grafo
@@ -41,12 +52,17 @@ arquivos e o diff do commit, s busca commits e n/N navegam pelos resultados, / f
 `;
 
 export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptions {
+  // parseArgs does not say where `--` was, and the paths after it are not revisions.
+  const dashes = argv.indexOf('--');
+  const paths = dashes === -1 ? [] : argv.slice(dashes + 1);
   let values;
+  let positionals: string[];
   try {
-    ({values} = parseArgs({
-      args: argv,
-      allowPositionals: false,
+    ({values, positionals} = parseArgs({
+      args: dashes === -1 ? argv : argv.slice(0, dashes),
+      allowPositionals: true,
       options: {
+        directory: {type: 'string', short: 'C'},
         'max-count': {type: 'string', short: 'n'},
         'no-color': {type: 'boolean'},
         ascii: {type: 'boolean'},
@@ -79,6 +95,9 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     compact: values.compact ?? false,
     order,
     stash: !values['no-stash'],
+    revs: positionals,
+    paths,
+    directory: values.directory,
     mouse: !values['no-mouse'],
     help: values.help ?? false,
     version: values.version ?? false,

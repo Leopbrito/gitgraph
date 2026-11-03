@@ -32,11 +32,12 @@ Sem o `npm link`, use `node dist/cli.js` dentro do repositório que quer ver, ou
 ## Uso
 
 ```sh
-gitgraph [opções]
+gitgraph [opções] [<revisão>...] [-- <caminho>...]
 ```
 
 | Opção | Efeito |
 | --- | --- |
+| `-C <caminho>` | Abre o repositório de outro diretório, sem precisar de `cd` (como `git -C`). |
 | `-n`, `--max-count <n>` | Mostra no máximo `n` commits. Sem ela, a interface carrega 500 e busca mais conforme você desce, e a saída por pipe imprime tudo. |
 | `--no-color` | Desliga as cores (também vale a variável `NO_COLOR`). |
 | `--ascii` | Usa só caracteres ASCII no grafo e nos símbolos da interface. |
@@ -46,6 +47,8 @@ gitgraph [opções]
 | `--no-mouse` | Desliga o suporte a mouse (veja abaixo). |
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
+
+**Revisões e caminhos.** Sem argumentos, mostra todas as branches locais e remotas e as tags. Com revisões (`gitgraph main feature-x`, `gitgraph v1.0..main`, um hash), mostra só o que é alcançável delas; na interface, elas viram o filtro de branch inicial (`/` muda). Depois de `--`, limita o histórico aos commits que mexeram nos caminhos (`gitgraph -- src/`), com o grafo religado entre os commits que sobram. Uma revisão inexistente é erro (`revisão desconhecida: x`); `--` separa revisões de caminhos quando o nome é ambíguo. Vale também na saída por pipe.
 
 Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como um nó oco (`○`, `o` com `--ascii`) com o rótulo `(stash@{0})`, logo acima do commit em que foi feito; os commits internos que o git cria para o stash (índice e arquivos não rastreados) ficam escondidos. Um stash só aparece se o commit-base estiver na lista (por exemplo, `-n` pode cortá-lo, e um filtro de branch que não inclua o commit-base também). Use `--no-stash` para não mostrá-los.
 

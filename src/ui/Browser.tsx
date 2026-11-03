@@ -46,6 +46,8 @@ export type LoadGraph = (revs: string[], limit: number) => Promise<GraphData>;
 interface Props {
   initial: GraphData;
   initialLimit: number;
+  /** Branches filtering the list at the start (from the command line); empty = all. */
+  initialRevs?: string[];
   /** Teto de commits (--max-count): sem ele, a lista cresce sob demanda. */
   maxCommits?: number;
   load: LoadGraph;
@@ -73,13 +75,13 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, maxCommits, load, checkout, merge, changes, mouse}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], maxCommits, load, checkout, merge, changes, mouse}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
   const {columns, rows: terminalRows} = useWindowSize();
   const [data, setData] = useState(initial);
-  const [revs, setRevs] = useState<string[]>([]);
+  const [revs, setRevs] = useState<string[]>(initialRevs);
   const [limit, setLimit] = useState(initialLimit);
   const [cursor, setCursor] = useState({selected: 0, offset: 0});
   const [picker, setPicker] = useState<{query: string; index: number; selected: string[]} | null>(null);

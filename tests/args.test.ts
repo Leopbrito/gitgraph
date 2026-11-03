@@ -10,6 +10,9 @@ describe('parseCliArgs', () => {
       compact: false,
       order: 'date',
       stash: true,
+      revs: [],
+      paths: [],
+      directory: undefined,
       mouse: true,
       help: false,
       version: false,
@@ -47,7 +50,6 @@ describe('parseCliArgs', () => {
   it('explica os erros de uso em português', () => {
     expect(() => parseCliArgs(['--foo'])).toThrow('opção desconhecida: --foo');
     expect(() => parseCliArgs(['-n'])).toThrow(/exige um valor/);
-    expect(() => parseCliArgs(['main'])).toThrow('argumento inesperado: main');
   });
 
   it('reads --order and defaults to date', () => {
@@ -69,5 +71,44 @@ describe('parseCliArgs', () => {
   it('shows stashes by default and hides them with --no-stash', () => {
     expect(parseCliArgs([]).stash).toBe(true);
     expect(parseCliArgs(['--no-stash']).stash).toBe(false);
+  });
+});
+
+describe('revisões, caminhos e -C', () => {
+  it('usa os padrões sem posicionais', () => {
+    const options = parseCliArgs([]);
+    expect(options.revs).toEqual([]);
+    expect(options.paths).toEqual([]);
+    expect(options.directory).toBeUndefined();
+  });
+
+  it('lê revisões posicionais, em qualquer posição entre as opções', () => {
+    expect(parseCliArgs(['main', 'feature-x']).revs).toEqual(['main', 'feature-x']);
+    const options = parseCliArgs(['main', '--ascii', 'v1.0..main', '-n', '5']);
+    expect(options.revs).toEqual(['main', 'v1.0..main']);
+    expect(options.ascii).toBe(true);
+    expect(options.maxCount).toBe(5);
+  });
+
+  it('separa os caminhos após --', () => {
+    const options = parseCliArgs(['main', '--', 'src/', 'README.md']);
+    expect(options.revs).toEqual(['main']);
+    expect(options.paths).toEqual(['src/', 'README.md']);
+  });
+
+  it('aceita só caminhos, e opções parecidas após -- viram caminhos', () => {
+    const options = parseCliArgs(['--', 'src/', '--ascii']);
+    expect(options.revs).toEqual([]);
+    expect(options.paths).toEqual(['src/', '--ascii']);
+    expect(options.ascii).toBe(false);
+  });
+
+  it('lê -C e --directory', () => {
+    expect(parseCliArgs(['-C', '/tmp/repo']).directory).toBe('/tmp/repo');
+    expect(parseCliArgs(['--directory=../outro']).directory).toBe('../outro');
+  });
+
+  it('rejeita -C sem valor', () => {
+    expect(() => parseCliArgs(['-C'])).toThrow(UsageError);
   });
 });
