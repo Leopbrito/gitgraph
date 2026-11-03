@@ -295,6 +295,27 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('h000002');
     });
 
+    it('stays busy until the checkout itself finishes, even if an earlier reload ends first', async () => {
+      let finishCheckout: () => void = () => {};
+      const checkout = vi.fn(() => new Promise<void>(resolve => (finishCheckout = resolve)));
+      let finishReload: (d: GraphData) => void = () => {};
+      const load = vi.fn<LoadGraph>(() => new Promise(resolve => (finishReload = resolve)));
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
+      );
+      // The checkout is running when a reload (a --watch event, or r) starts and ends.
+      await press(stdin, 'j', 'j', 'c', '\r', 'r');
+      expect(checkout).toHaveBeenCalledTimes(1);
+      finishReload(data(5));
+      await tick();
+      // The reload is done but the checkout is not: keys that start git work must still wait.
+      await press(stdin, 'k', 'c');
+      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).toContain('carregando');
+      finishCheckout();
+      await tick();
+    });
+
     it('also confirms with y', async () => {
       const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
       const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));

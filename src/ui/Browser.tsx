@@ -120,7 +120,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   // First visible graph column, for graphs wider than the terminal.
   const [graphOffset, setGraphOffset] = useState(0);
   const [picker, setPicker] = useState<{query: string; index: number; selected: string[]} | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Work in flight: reloads and git actions. A count, not a flag, so a reload that finishes while a
+  // checkout or merge is still running cannot make the list look idle (and let a second action start).
+  const [pending, setPending] = useState(0);
+  const loading = pending > 0;
+  const begin = useCallback(() => setPending(n => n + 1), []);
+  const finish = useCallback(() => setPending(n => Math.max(0, n - 1)), []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<{targets: CheckoutTarget[]; index: number} | null>(null);
@@ -182,7 +187,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const reload = useCallback(
     (nextRevs: string[], nextLimit: number, resetCursor: boolean, after?: {follow?: boolean; notice?: string}) => {
       const id = ++request.current;
-      setLoading(true);
+      begin();
       setError(null);
       load(nextRevs, nextLimit)
         .then(next => {
@@ -197,11 +202,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         .catch(e => {
           if (id === request.current) setError(e instanceof Error ? e.message : String(e));
         })
-        .finally(() => {
-          if (id === request.current) setLoading(false);
-        });
+        .finally(finish);
     },
-    [load],
+    [load, begin, finish],
   );
 
   // Perto do fim com a lista cheia: provavelmente há mais histórico.
@@ -267,7 +270,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       setNotice(`já está em ${describeTarget(target)}`);
       return;
     }
-    setLoading(true);
+    begin();
     setError(null);
     checkout(target)
       .then(() => {
@@ -279,10 +282,10 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         const message = oneLine(e instanceof Error ? e.message : String(e));
         // The switch happened and only the pull failed: refresh so HEAD is right.
         if (e instanceof PartialCheckoutError) reload(revs, limit, false, {follow: true});
-        else setLoading(false);
         // After reload(), which clears the error when it starts.
         setError(message);
-      });
+      })
+      .finally(finish);
   };
 
   const failure = (e: unknown) => oneLine(e instanceof Error ? e.message : String(e));
@@ -298,7 +301,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const runMerge = (target: MergeTarget) => {
     const branch = data.refs.head.branch ?? '';
     setMergePrompt(null);
-    setLoading(true);
+    begin();
     setError(null);
     merge
       .merge(target)
@@ -313,25 +316,23 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           reload(revs, limit, false, {follow: true});
           setConflict({files: e.files, index: 0});
         } else {
-          setLoading(false);
           setError(failure(e));
         }
-      });
+      })
+      .finally(finish);
   };
 
   const abortMerge = () => {
     setConflict(null);
-    setLoading(true);
+    begin();
     merge
       .abort()
       .then(() => {
         setNotice('merge abortado');
         reload(revs, limit, false, {follow: true});
       })
-      .catch(e => {
-        setLoading(false);
-        setError(failure(e));
-      });
+      .catch(e => setError(failure(e)))
+      .finally(finish);
   };
 
   /** Opens the dialog for the operation the repository is stopped in. */
@@ -350,7 +351,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       return;
     }
     const done = {abort: 'abortado', proceed: 'continuado', skip: 'passo pulado'}[choice];
-    setLoading(true);
+    begin();
     setError(null);
     operation[choice === 'proceed' ? 'proceed' : choice](op)
       .then(() => reload(revs, limit, false, {follow: true, notice: `${op} ${done}`}))
@@ -358,13 +359,14 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         // The state may have changed even so (a later step stopped on new conflicts): refresh it.
         reload(revs, limit, false);
         setError(failure(e));
-      });
+      })
+      .finally(finish);
   };
 
   const runReplay = (op: 'cherry-pick' | 'revert', target: Commit) => {
     if (!history) return;
     setReplaying(null);
-    setLoading(true);
+    begin();
     setError(null);
     const mainline = target.parents.length > 1;
     (op === 'cherry-pick' ? history.cherryPick : history.revert)(target.hash, mainline)
@@ -380,10 +382,10 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           reload(revs, limit, false);
           setStopped({op: e.operation, files: e.files, index: 0});
         } else {
-          setLoading(false);
           setError(failure(e));
         }
-      });
+      })
+      .finally(finish);
   };
 
   const stashName = (hash: string) => refsOf(hash).find(r => r.kind === 'stash')?.name ?? 'o stash';
@@ -391,7 +393,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const runStash = (op: StashOp, hash: string) => {
     if (!stash) return;
     setDropping(null);
-    setLoading(true);
+    begin();
     setError(null);
     stash(op, hash)
       .then(name => {
@@ -407,10 +409,10 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
             notice: `${e.name}: conflitos em ${listed}; resolva no terminal (stash mantido)`,
           });
         } else {
-          setLoading(false);
           setError(failure(e));
         }
-      });
+      })
+      .finally(finish);
   };
 
   const leaveMerge = () => {
