@@ -6,6 +6,7 @@ import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
 import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
+import {OperationStoppedError, type HistoryActions} from '../../src/git/history.js';
 import type {Operation, OperationActions} from '../../src/git/operation.js';
 import type {RefActions} from '../../src/git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../../src/git/stash.js';
@@ -1221,6 +1222,128 @@ describe('Browser', () => {
     );
     expect(lastFrame()).toContain('main, feature');
     expect(lastFrame()).not.toContain('todas as branches');
+  });
+
+  describe('cherry-pick, revert and reset (C, v, X)', () => {
+    const history = (over: Partial<HistoryActions> = {}): HistoryActions => ({
+      cherryPick: vi.fn().mockResolvedValue(undefined),
+      revert: vi.fn().mockResolvedValue(undefined),
+      resetPreview: vi.fn().mockResolvedValue({ahead: 1, orphaned: 0, changed: 0}),
+      reset: vi.fn().mockResolvedValue(undefined),
+      ...over,
+    });
+    const open = (act = history(), operation?: OperationActions) => {
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
+      const rendered = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} history={act} operation={operation} />,
+      );
+      return {...rendered, act, load};
+    };
+
+    it('C asks first, then cherry-picks the selected commit and reloads', async () => {
+      const {stdin, lastFrame, act, load} = open();
+      await press(stdin, 'j', 'C');
+      expect(lastFrame()).toContain('Cherry-pick de h000001 em main?');
+      expect(lastFrame()).toContain('commit 1');
+      await press(stdin, 'n');
+      expect(act.cherryPick).not.toHaveBeenCalled();
+      await press(stdin, 'C', 'y');
+      await tick();
+      expect(act.cherryPick).toHaveBeenCalledWith('h000001', false);
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('cherry-pick de h000001 aplicado');
+    });
+
+    it('v asks first, then reverts', async () => {
+      const {stdin, lastFrame, act} = open();
+      // Reverting the HEAD commit is allowed (it is the usual case).
+      await press(stdin, 'v');
+      expect(lastFrame()).toContain('Reverter h000000?');
+      await press(stdin, 'y');
+      await tick();
+      expect(act.revert).toHaveBeenCalledWith('h000000', false);
+      expect(lastFrame()).toContain('h000000 revertido');
+    });
+
+    it('a merge commit is applied relative to its first parent, and the prompt says so', async () => {
+      const merge: Commit = {...commit(0, ['h000001', 'h000002']), subject: 'merge'};
+      const rows = layoutGraph([merge, commit(1, ['h000003']), commit(2, ['h000003']), commit(3, [])]);
+      const act = history();
+      const {stdin, lastFrame} = render(
+        <Browser initial={{rows, refs: {...refs, head: {hash: 'hzzzzzz', branch: 'main'}}}} initialLimit={100} load={vi.fn<LoadGraph>()} history={act} />,
+      );
+      await press(stdin, 'C');
+      expect(lastFrame()).toContain('Commit de merge: aplicado em relação ao 1º pai');
+      await press(stdin, 'y');
+      await tick();
+      expect(act.cherryPick).toHaveBeenCalledWith('h000000', true);
+    });
+
+    it('when it stops on conflicts it reloads and opens the dialog with the files', async () => {
+      const cherryPick = vi.fn().mockRejectedValue(new OperationStoppedError('cherry-pick', ['a.txt']));
+      const {stdin, lastFrame, load} = open(history({cherryPick}));
+      await press(stdin, 'j', 'C', 'y');
+      await tick();
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('cherry-pick com conflitos (1 arquivo): a.txt');
+      expect(lastFrame()).toContain('Pular este passo');
+    });
+
+    it('other failures show the reason and do not reload', async () => {
+      const revert = vi.fn().mockRejectedValue(new Error('error: your local changes would be overwritten'));
+      const {stdin, lastFrame, load} = open(history({revert}));
+      await press(stdin, 'v', 'y');
+      await tick();
+      expect(lastFrame()).toContain('erro: your local changes would be overwritten');
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it('X opens the reset prompt on the selected commit; the HEAD itself is refused', async () => {
+      const {stdin, lastFrame} = open();
+      await press(stdin, 'X');
+      expect(lastFrame()).toContain('o HEAD já está nesse commit');
+      await press(stdin, 'j', 'X');
+      await tick();
+      expect(lastFrame()).toContain('Reset de main para h000001');
+      // The list keys are the prompt's now.
+      await press(stdin, 'q');
+      expect(lastFrame()).toContain('Reset de main para h000001');
+      await press(stdin, '\u001B');
+      expect(lastFrame()).not.toContain('Reset de');
+    });
+
+    it('C on the HEAD commit is refused', async () => {
+      const {stdin, lastFrame, act} = open();
+      await press(stdin, 'C');
+      expect(lastFrame()).toContain('esse commit já é o HEAD');
+      expect(act.cherryPick).not.toHaveBeenCalled();
+    });
+
+    it('is refused while another operation is in progress', async () => {
+      const inProgress: GraphData = {rows: layoutGraph(linear(3)), refs: {...refs, head: {...refs.head, operation: 'rebase'}}};
+      const act = history();
+      const {stdin, lastFrame} = render(
+        <Browser initial={inProgress} initialLimit={100} load={vi.fn<LoadGraph>()} history={act} />,
+      );
+      await press(stdin, 'j', 'C');
+      expect(lastFrame()).toContain('rebase em andamento: aperte m');
+      expect(act.cherryPick).not.toHaveBeenCalled();
+    });
+
+    it('is refused on a stash, on the uncommitted node and without the actions', async () => {
+      const bare = render(<Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(bare.stdin, 'j', 'v');
+      expect(bare.lastFrame()).toContain('indisponíveis');
+
+      const commits = linear(3);
+      commits[0] = {...commits[0]!, stash: true};
+      const stashed = render(
+        <Browser initial={{rows: layoutGraph(commits), refs}} initialLimit={100} load={vi.fn<LoadGraph>()} history={history()} />,
+      );
+      await press(stashed.stdin, 'C');
+      expect(stashed.lastFrame()).toContain('um stash não é um commit da história');
+      expect(stashed.lastFrame()).not.toContain('Cherry-pick de');
+    });
   });
 
   describe('operation in progress (cherry-pick, revert, rebase)', () => {

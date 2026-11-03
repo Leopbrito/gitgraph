@@ -19,11 +19,12 @@ import type {CopyMethod} from '../clipboard.js';
 import type {ChangesActions} from '../git/changes.js';
 import type {ChangeSource} from '../git/watch.js';
 import {canSkip, type Operation, type OperationActions} from '../git/operation.js';
+import {OperationStoppedError, type HistoryActions} from '../git/history.js';
 import type {RefActions} from '../git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../git/stash.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
-import type {GraphRow} from '../graph/types.js';
+import type {Commit, GraphRow} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
 import {CheckoutPrompt} from './CheckoutPrompt.js';
 import {ConfirmPrompt} from './ConfirmPrompt.js';
@@ -36,6 +37,7 @@ import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
 import {followCommit} from './follow.js';
 import {OperationPrompt, operationOptions, type OperationChoice} from './OperationPrompt.js';
+import {ResetPrompt} from './ResetPrompt.js';
 import {RefManager} from './RefManager.js';
 import {refTargets, type RefMode} from './refTargets.js';
 import {SearchPrompt} from './SearchPrompt.js';
@@ -83,6 +85,8 @@ interface Props {
   refEdit?: RefActions;
   /** Abort, continue or skip a stopped cherry-pick, revert or rebase. */
   operation?: OperationActions;
+  /** Cherry-pick, revert and reset of the selected commit (keys C, v, X). */
+  history?: HistoryActions;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -99,7 +103,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash, refEdit, operation}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash, refEdit, operation, history}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -119,6 +123,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [refMode, setRefMode] = useState<RefMode | null>(null);
+  // Cherry-pick and revert ask first; reset has its own prompt.
+  const [replaying, setReplaying] = useState<{op: 'cherry-pick' | 'revert'; commit: Commit} | null>(null);
+  const [resetting, setResetting] = useState(false);
   // A stopped cherry-pick, revert or rebase (a merge has its own, older dialog).
   const [stopped, setStopped] = useState<{op: Operation; files: string[]; index: number} | null>(null);
   // Dropping a stash is the only stash action that asks first: apply and pop keep the changes.
@@ -305,6 +312,31 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       });
   };
 
+  const runReplay = (op: 'cherry-pick' | 'revert', target: Commit) => {
+    if (!history) return;
+    setReplaying(null);
+    setLoading(true);
+    setError(null);
+    const mainline = target.parents.length > 1;
+    (op === 'cherry-pick' ? history.cherryPick : history.revert)(target.hash, mainline)
+      .then(() =>
+        reload(revs, limit, false, {
+          follow: true,
+          notice: op === 'cherry-pick' ? `cherry-pick de ${target.hash.slice(0, 7)} aplicado` : `${target.hash.slice(0, 7)} revertido`,
+        }),
+      )
+      .catch(e => {
+        if (e instanceof OperationStoppedError) {
+          // Stopped halfway: refresh so the header says so, then ask what to do.
+          reload(revs, limit, false);
+          setStopped({op: e.operation, files: e.files, index: 0});
+        } else {
+          setLoading(false);
+          setError(failure(e));
+        }
+      });
+  };
+
   const stashName = (hash: string) => refsOf(hash).find(r => r.kind === 'stash')?.name ?? 'o stash';
 
   const runStash = (op: StashOp, hash: string) => {
@@ -346,7 +378,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped) return;
+    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped || replaying || resetting) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -370,6 +402,15 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
 
     // The ref manager handles its own keys.
     if (refMode) return;
+
+    if (replaying) {
+      if (key.escape || input === 'n') setReplaying(null);
+      else if (key.return || input === 'y') runReplay(replaying.op, replaying.commit);
+      return;
+    }
+
+    // The reset prompt handles its own keys.
+    if (resetting) return;
 
     if (stopped) {
       const options = operationOptions(stopped.op);
@@ -548,6 +589,22 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         setRefMode(mode);
       }
     }
+    else if (input === 'C' || input === 'v' || input === 'X') {
+      const head = data.refs.head;
+      if (!commit || notACommit('não dá para aplicar, reverter nem resetar')) return;
+      if (commit.stash) setNotice('um stash não é um commit da história: use a, p ou x');
+      else if (!history) setNotice('cherry-pick, revert e reset indisponíveis');
+      else if (loading) setNotice('espere a carga terminar');
+      else if (head.operation) setNotice(`${head.operation} em andamento: aperte m para continuar, pular ou abortar`);
+      else if (!head.hash) setNotice('o repositório ainda não tem commits');
+      else if (input === 'X' && commit.hash === head.hash) setNotice('o HEAD já está nesse commit');
+      else if (input === 'C' && commit.hash === head.hash) setNotice('esse commit já é o HEAD');
+      else {
+        setError(null);
+        if (input === 'X') setResetting(true);
+        else setReplaying({op: input === 'C' ? 'cherry-pick' : 'revert', commit});
+      }
+    }
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
@@ -612,6 +669,10 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     ? confirmHint(prompt.targets.length)
     : mergePrompt
       ? confirmHint(mergePrompt.targets.length)
+      : replaying
+        ? confirmHint(1)
+      : resetting
+        ? `Esc cancela`
       : stopped
         ? `a aborta ${dot} c continua${canSkip(stopped.op) ? ` ${dot} s pula` : ''} ${dot} d/Esc deixa ${dot} ${arrows}/Enter escolhe`
       : refMode
@@ -683,6 +744,34 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           targets={mergePrompt.targets}
           index={mergePrompt.index}
           branch={data.refs.head.branch ?? ''}
+        />
+      ) : replaying ? (
+        <ConfirmPrompt
+          title={
+            replaying.op === 'cherry-pick'
+              ? `Cherry-pick de ${replaying.commit.hash.slice(0, 7)} em ${data.refs.head.branch ?? 'HEAD destacado'}?`
+              : `Reverter ${replaying.commit.hash.slice(0, 7)}?`
+          }
+          lines={[
+            replaying.commit.subject,
+            replaying.commit.parents.length > 1
+              ? 'Commit de merge: aplicado em relação ao 1º pai (git ... -m 1).'
+              : replaying.op === 'cherry-pick'
+                ? 'Cria um commit novo com as mesmas mudanças, com a mensagem original.'
+                : 'Cria um commit novo que desfaz as mudanças dele, com a mensagem do git.',
+            'Se houver conflitos, você escolhe entre abortar, continuar ou pular.',
+          ]}
+        />
+      ) : resetting && history && commit ? (
+        <ResetPrompt
+          target={commit}
+          branch={data.refs.head.branch}
+          actions={history}
+          onCancel={() => setResetting(false)}
+          onDone={done => {
+            setResetting(false);
+            reload(revs, limit, false, {follow: true, notice: done});
+          }}
         />
       ) : stopped ? (
         <OperationPrompt operation={stopped.op} files={stopped.files} index={stopped.index} />

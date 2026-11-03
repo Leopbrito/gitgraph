@@ -51,6 +51,7 @@ src/
     fetch.ts       # fetchAll(): `git fetch --all --prune` com `network: true`; traduz falha de autenticação
     refsEdit.ts    # RefActions/gitRefActions(): validar, criar, renomear e apagar branches e tags; UnmergedBranchError
     operation.ts   # Operation, operationInProgress(), OperationActions/gitOperationActions(): abort/continue/skip de merge, cherry-pick, revert e rebase parados
+    history.ts     # HistoryActions/gitHistoryActions(): cherry-pick, revert, reset e a prévia do reset; OperationStoppedError
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n}); runStash() (apply/pop/drop) e StashConflictError
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -77,6 +78,7 @@ src/
     RefManager.tsx # criar/renomear/apagar branch e tag: máquina de passos que ocupa o painel e trata as próprias teclas
     refTargets.ts  # refTargets(): que refs de um commit dá para renomear/apagar (puro)
     OperationPrompt.tsx # operação parada (cherry-pick, revert, rebase): abortar, continuar, pular ou deixar
+    ResetPrompt.tsx # reset soft/mixed/hard: prévia do efeito e confirmação (forte no --hard)
     ConfirmPrompt.tsx # pergunta sim/não genérica (título e linhas), usada no drop de stash
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
@@ -137,6 +139,12 @@ Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo
 ### Operações em andamento
 
 `loadRefs` guarda `head.operation` (uma `Operation`: `merge`, `cherry-pick`, `revert` ou `rebase`) e `head.merging` (verdadeiro só para o merge, que tem seu diálogo mais antigo, com abortar/deixar). Para as demais, o `Browser` mantém `stopped` (`{op, files, index}`) e renderiza `OperationPrompt` no lugar do painel; as opções vêm de `operationOptions(op)` (o `skip` só existe quando `canSkip`: merge não tem passos). `runOperation` chama `OperationActions` (`abort`, `proceed`, `skip`, injetadas como `load`) e **sempre recarrega**, também na falha, porque o estado pode ter mudado (um passo seguinte parou em novos conflitos); o erro é posto depois do `reload`, que o limparia. `proceed` é `git <op> --continue` com `GIT_EDITOR=true` e `GIT_SEQUENCE_EDITOR=true` (`GitOptions.env`): sem isso o git abriria um editor dentro da TUI e travaria; a mensagem usada é a do próprio git. Enquanto o diálogo está aberto, as teclas da lista e o mouse ficam inertes.
+
+### Cherry-pick, revert e reset (`C`, `v`, `X`)
+
+`Browser.history: HistoryActions` (injetado, `gitHistoryActions`). **Cherry-pick e revert** pedem confirmação (`ConfirmPrompt`, estado `replaying`) e rodam `git cherry-pick <hash>` / `git revert --no-edit <hash>`, com `-m 1` num commit de merge (o prompt avisa). Se o git falha, `step()` olha `operationInProgress`: com uma operação parada lança `OperationStoppedError(operação, arquivos em conflito)` e o `Browser` recarrega e abre o **mesmo `OperationPrompt`** das operações já em andamento (um resultado vazio também para assim, com a lista de arquivos vazia); sem operação parada o erro é de recusa (alterações locais no caminho) e nada mudou, então só aparece no rodapé. Ficam barradas com outra operação em andamento (a mensagem manda apertar `m`), num stash, no nó das alterações e, no `C`, no próprio HEAD.
+
+**Reset** tem componente próprio, `ResetPrompt`, uma máquina de passos que trata as próprias teclas como o `RefManager`: `mode` (soft/mixed/hard) → `confirm` (y/n; soft e mixed) ou `force` (`--hard`: digitar o nome da branch, ou `descartar` com o HEAD destacado). `resetPreview` roda ao abrir e **só informa** (se falhar, a escolha continua possível): `ahead` = `alvo..HEAD`; `orphaned` = commits do HEAD que nem o alvo nem **nenhuma outra** branch, remota ou tag alcançam (`rev-list --count HEAD --not <alvo> <outras refs>`, a branch atual fica de fora), ou seja, os que só o reflog guardaria; `changed` = arquivos rastreados modificados ou em conflito, do `git status`, que o `--hard` jogaria fora (não rastreados não são tocados). O alvo é sempre o commit selecionado, e o HEAD é recusado. Depois do sucesso, `reload` com `follow`.
 
 ### Branches e tags (`b`, `t`, `T`, `R`, `D`)
 
