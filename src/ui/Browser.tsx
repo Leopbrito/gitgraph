@@ -28,6 +28,8 @@ import {separator, tint, useDisplay} from './display.js';
 import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
+import {SearchPrompt} from './SearchPrompt.js';
+import {findMatches, firstFrom, nextMatch} from './search.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
 import type {MouseEvent, MouseSource} from './mouse.js';
 import {useDoubleClick} from './useDoubleClick.js';
@@ -89,6 +91,9 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   // A merge in progress: 0 = abort it, 1 = leave it for the terminal.
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
+  // Active search (highlight, n/N); `typing` is set while the input is open.
+  const [query, setQuery] = useState('');
+  const [typing, setTyping] = useState<{origin: number; previous: string} | null>(null);
   const request = useRef(0);
   const isDoubleClick = useDoubleClick();
 
@@ -104,6 +109,8 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
     [data.rows],
   );
   const total = data.rows.length;
+  const matches = useMemo(() => findMatches(data.rows, query), [data.rows, query]);
+  const matchSet = useMemo(() => new Set(matches), [matches]);
   const listHeight = Math.max(3, terminalRows - DETAIL_LINES - CHROME_LINES);
   // Recalculado a cada render: o redimensionamento do terminal não esconde o cursor.
   const offset = scrollIntoView(heights, cursor.offset, cursor.selected, listHeight);
@@ -238,7 +245,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker) return;
+    if (viewing || prompt || mergePrompt || conflict || picker || typing) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -329,6 +336,30 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
       return;
     }
 
+    if (typing) {
+      // Each keystroke searches again and jumps to the first match from where the search began.
+      const update = (next: string) => {
+        setQuery(next);
+        select(firstFrom(findMatches(data.rows, next), typing.origin) ?? typing.origin);
+      };
+      if (key.escape) {
+        setQuery(typing.previous);
+        setTyping(null);
+        select(typing.origin);
+      } else if (key.return) {
+        setTyping(null);
+        if (query.trim() !== '' && matches.length === 0) {
+          setNotice(`nenhum commit encontrado para "${query.trim()}"`);
+          setQuery('');
+        }
+      } else if (key.backspace || key.delete) {
+        update(query.slice(0, -1));
+      } else if (input && !key.ctrl && !key.meta) {
+        update(query + input);
+      }
+      return;
+    }
+
     if (notice) setNotice(null);
     if (input === 'q') exit();
     else if (key.downArrow || input === 'j') select(cursor.selected + 1);
@@ -338,6 +369,15 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if ((key.return || input === 'd') && commit) setViewing(true);
+    else if (input === 's') {
+      setTyping({origin: cursor.selected, previous: query});
+      setQuery('');
+    }
+    else if (input === 'n' || input === 'N') {
+      const found = nextMatch(matches, cursor.selected, input === 'n' ? 1 : -1);
+      if (found !== null) select(found);
+      else setNotice(query === '' ? 'nenhuma busca: aperte s para buscar' : 'nenhum resultado na busca');
+    }
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
     else if (input === 'm' && !loading) {
       const head = data.refs.head;
@@ -364,7 +404,10 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
         setPrompt({targets, index});
       }
     }
-    else if (key.escape) setError(null);
+    else if (key.escape) {
+      setError(null);
+      setQuery('');
+    }
   });
 
   const headOf = (hash: string) => ({
@@ -389,10 +432,12 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
       ? confirmHint(mergePrompt.targets.length)
       : conflict
         ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
+        : typing
+          ? `digite para buscar ${dot} Enter confirma ${dot} Esc cancela`
         : picker
           ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
           : (notice ??
-            `j/k ${arrows} mover ${dot} g/G início/fim ${dot} Enter detalhes ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
+            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}j/k ${arrows} mover ${dot} g/G ${dot} Enter detalhes ${dot} s busca ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
 
   if (viewing && commit) {
     return (
@@ -415,6 +460,11 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
         <Text bold color={tint(display, data.refs.head.merging ? 'yellow' : 'cyan')}>
           {headLabel(data.refs.head)}
         </Text>
+        {query !== '' && (
+          <Text bold color={tint(display, 'yellow')}>
+            {` ${dot} busca "${query.trim()}" ${matchSet.has(cursor.selected) ? matches.indexOf(cursor.selected) + 1 : '-'}/${matches.length}${more ? '+' : ''}`}
+          </Text>
+        )}
         <Text dimColor>
           {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
         </Text>
@@ -428,6 +478,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
             refs={refsOf(row.commit.hash)}
             head={headOf(row.commit.hash)}
             selected={offset + i === cursor.selected}
+            matched={matchSet.has(offset + i)}
           />
         ))}
       </Box>
@@ -442,6 +493,8 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
         />
       ) : conflict ? (
         <ConflictPrompt files={conflict.files} index={conflict.index} />
+      ) : typing ? (
+        <SearchPrompt query={query} count={matches.length} more={more} />
       ) : picker ? (
         <BranchPicker
           query={picker.query}

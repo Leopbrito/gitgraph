@@ -1128,4 +1128,104 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('1/5');
     });
   });
+
+  describe('search', () => {
+    // Subjects (index): 0 fix login, 1 add search, 2 fix cache, 3 docs, 4 fix typo.
+    const subjects = ['fix login', 'add search', 'fix cache', 'docs', 'fix typo'];
+    const searchable = (): GraphData => ({
+      rows: layoutGraph(linear(5).map((c, i) => ({...c, subject: subjects[i] ?? '', author: i === 3 ? 'Bruno' : 'Ana'}))),
+      refs,
+    });
+    const open = () => render(<Browser initial={searchable()} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+    const typeQuery = async (stdin: {write: (s: string) => void}, text: string) => {
+      await press(stdin, 's', ...text.split(''));
+    };
+
+    it('jumps to the first match from the cursor as you type and shows the counter', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'fix');
+      expect(lastFrame()).toContain('Buscar: fix');
+      expect(lastFrame()).toContain('3 resultados');
+      // The cursor is already on a match (row 0), so it stays.
+      expect(lastFrame()).toContain('1/5');
+      await press(stdin, '\u007F', '\u007F', '\u007F');
+      await press(stdin, 'c', 'a', 'c');
+      expect(lastFrame()).toContain('3/5');
+      expect(lastFrame()).toContain('1 resultado');
+    });
+
+    it('finds by author and by hash', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'bruno');
+      expect(lastFrame()).toContain('4/5');
+      await press(stdin, '\u001B');
+      await typeQuery(stdin, 'h000001');
+      expect(lastFrame()).toContain('2/5');
+    });
+
+    it('Enter keeps the search; n and N walk the matches and wrap around', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'fix');
+      await press(stdin, '\r');
+      expect(lastFrame()).toContain('busca "fix" 1/3');
+      expect(lastFrame()).toContain('n/N próximo/anterior');
+      await press(stdin, 'n');
+      expect(lastFrame()).toContain('3/5');
+      expect(lastFrame()).toContain('busca "fix" 2/3');
+      await press(stdin, 'n', 'n');
+      expect(lastFrame()).toContain('1/5');
+      await press(stdin, 'N');
+      expect(lastFrame()).toContain('5/5');
+    });
+
+    it('marks the matching rows with * while the search is active', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'fix');
+      await press(stdin, '\r');
+      // Row 0 is the cursor (>); the other two matches carry the * marker.
+      const lines = (lastFrame() ?? '').split('\n');
+      expect(lines.filter(l => l.includes('*'))).toHaveLength(2);
+      expect(lines.find(l => l.includes('fix cache'))).toContain('*');
+      expect(lines.find(l => l.includes('fix typo'))).toContain('*');
+      expect(lines.find(l => l.includes('add search'))).not.toContain('*');
+      await press(stdin, '\u001B');
+      expect(lastFrame()).not.toContain('busca "fix"');
+      expect(lastFrame()).not.toContain('*');
+    });
+
+    it('Esc while typing restores the cursor and the previous search', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'docs');
+      await press(stdin, '\r');
+      expect(lastFrame()).toContain('4/5');
+      await press(stdin, 'g');
+      await typeQuery(stdin, 'typo');
+      expect(lastFrame()).toContain('5/5');
+      await press(stdin, '\u001B');
+      expect(lastFrame()).toContain('1/5');
+      expect(lastFrame()).toContain('busca "docs"');
+    });
+
+    it('says so when nothing is found and drops the search', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'zzz');
+      expect(lastFrame()).toContain('nenhum resultado');
+      await press(stdin, '\r');
+      expect(lastFrame()).toContain('nenhum commit encontrado para "zzz"');
+      expect(lastFrame()).not.toContain('busca "zzz"');
+    });
+
+    it('n without a search explains how to start one', async () => {
+      const {lastFrame, stdin} = open();
+      await press(stdin, 'n');
+      expect(lastFrame()).toContain('aperte s para buscar');
+    });
+
+    it('does not take keys such as q or j as commands while typing', async () => {
+      const {lastFrame, stdin} = open();
+      await typeQuery(stdin, 'qj');
+      expect(lastFrame()).toContain('Buscar: qj');
+      expect(lastFrame()).toContain('nenhum resultado');
+    });
+  });
 });

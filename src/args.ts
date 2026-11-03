@@ -37,7 +37,7 @@ Opções:
   -v, --version        mostra a versão
 
 No terminal a interface é interativa (j/k, setas, PgUp/PgDn, g/G, Enter abre os
-arquivos e o diff do commit, / filtra por branch, q sai). Com a saída redirecionada (pipe), imprime texto puro.
+arquivos e o diff do commit, s busca commits e n/N navegam pelos resultados, / filtra por branch, q sai). Com a saída redirecionada (pipe), imprime texto puro.
 `;
 
 export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptions {

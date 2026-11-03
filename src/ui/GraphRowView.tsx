@@ -21,11 +21,13 @@ interface Props {
   head: HeadInfo;
   /** Destaca a linha (cursor da navegação). */
   selected?: boolean;
+  /** The row matches the active search. */
+  matched?: boolean;
 }
 
 // Cada linha é um único <Text> truncado na largura do terminal: o grafo não
 // desalinha e commits longos não quebram em várias linhas.
-export function GraphRowView({row, graphWidth, refs, head, selected = false}: Props) {
+export function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false}: Props) {
   const display = useDisplay();
   const lines = renderGraphLines(row, row.width, {spaced: display.spaced});
   const {commit} = row;
@@ -33,8 +35,8 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false}: Pr
     <Box flexDirection="column">
       <Text wrap="truncate-end">
         <GraphCells cells={lines.node} graphWidth={graphWidth} />
-        {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso). */}
-        <Text>{selected ? '>' : ' '}</Text>
+        {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso); `*` marca os resultados da busca. */}
+        <Text>{selected ? '>' : matched ? '*' : ' '}</Text>
         <Text inverse={selected}>
           <Text dimColor>{commit.hash.slice(0, 7)} </Text>
           {formatRefs(refs, head).map(label => (
@@ -42,7 +44,9 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false}: Pr
               {`(${label.text}) `}
             </Text>
           ))}
-          <Text>{commit.subject}</Text>
+          <Text bold={matched} color={matched ? tint(display, 'yellow') : undefined}>
+            {commit.subject}
+          </Text>
           <Text dimColor>{`  ${commit.author}, ${commit.date.slice(0, 10)}`}</Text>
         </Text>
       </Text>

@@ -59,10 +59,14 @@ Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como
 | `c` | Checkout do commit selecionado, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela). Troca para a branch local que aponta para o commit (uma lista, se forem várias) ou deixa o HEAD destacado nele. Num stash, só avisa que não dá para fazer checkout. Se o commit é a ponta de uma branch remota (`origin/x`) e a branch local `x` está em outro commit, a lista oferece também **`x` e pull**. |
 | `g` / `Home`, `G` / `End` | Vai ao início, ao fim |
 | `m` | Merge na branch atual, com confirmação (`Enter`/`y` confirma, `Esc`/`n` cancela): da branch que aponta para o commit selecionado (uma lista, se forem várias, incluindo remotas) ou do próprio commit. Em conflito, você escolhe entre abortar e deixar em andamento. |
+| `s` | Busca commits já carregados por mensagem (assunto e corpo), autor, e-mail ou hash, sem diferenciar maiúsculas: digite e a seleção pula para o primeiro resultado a partir de onde você estava; `Enter` confirma, `Esc` cancela e volta. |
+| `n` / `N` | Próximo / anterior resultado da busca (voltam ao início/fim ao chegar na ponta). `Esc` limpa a busca. |
 | `/` | Filtra por uma ou mais branches: digite para buscar, `↑`/`↓` movem, `Espaço` marca/desmarca, `Enter` aplica, `Esc` cancela |
 | `q` | Sai |
 
 **Mouse.** Clique em um commit para selecioná-lo, dê **duplo clique** para abrir a visão do commit (como `Enter`) e use a roda para mover a seleção (3 commits por passo). Na **visão do commit**, clique em um arquivo para selecioná-lo (ou na mensagem, para focá-la), dê duplo clique para abrir o diff dele e use a roda para rolar a mensagem ou mover a seleção de arquivos. Com um diálogo ou o diff aberto, o mouse é ignorado. Com o mouse ligado o terminal não seleciona texto por arraste; segure `Shift` (`Option` no iTerm2 e no Terminal do macOS) ou use `--no-mouse`.
+
+**Busca (`s`).** O cabeçalho mostra `busca "texto" 3/12` (posição do cursor entre os resultados e o total; `-` quando o cursor não está num resultado) e os commits que casam levam o assunto em amarelo e negrito, com `*` no lugar do marcador `>` (para funcionar também com `--no-color`). A busca é em memória, só nos commits **já carregados** (a lista cresce sob demanda; um `+` depois do total avisa que há mais histórico). Trocar o filtro de branch (`/`) mantém a busca e a aplica à nova lista. Escolhi `s` para a busca porque `/` já é o filtro de branch.
 
 O painel abaixo da lista mostra os detalhes do commit selecionado.
 

@@ -62,6 +62,8 @@ src/
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
     mouse.ts       # parseMouse(): relatórios SGR -> eventos de clique/roda (puro); MouseSource
     picker.ts      # lista e filtro de branches (puro)
+    search.ts      # matchesCommit()/findMatches()/firstFrom()/nextMatch(): busca em memória nos commits carregados (puro)
+    SearchPrompt.tsx # campo de busca (ocupa o lugar do painel de detalhes)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
     plain.ts       # formatPlain(): mesma saída em texto puro, para pipes (aceita ascii)
 tests/
@@ -103,6 +105,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 - **Checkout (`c`):** `checkoutTargets` escolhe o destino do commit selecionado: as branches locais cuja ponta ele é (ordenadas) ou, se não houver, HEAD destacado (`git switch --detach <hash>`); pontas só remotas caem em HEAD destacado. Sempre pede confirmação (`CheckoutPrompt`; com várias branches é uma lista). Se o HEAD já está no destino, só avisa no rodapé. Nunca usa `--force`: o git recusa quando alterações locais seriam sobrescritas, e a mensagem vira o erro de uma linha no rodapé.
 - **Branch local atrás da remota:** se o commit é a ponta de `origin/x` e a branch local `x` (`localBranchTips` em `refs.ts`) está em outro commit, `checkoutTargets` devolve `[pull x, branches realmente no commit, x sem pull, HEAD destacado]` e o prompt é uma lista com a primeira opção selecionada. O nome da branch local é o que sobra depois da remota, tentando cada `/` (aguenta `origin/feature/x`). `checkout` de um alvo `pull` faz `git switch x` e depois `git pull --ff-only <remota> x`. Se o pull falha, lança `PartialCheckoutError` (a troca já aconteceu): o `Browser` recarrega para o HEAD refletir isso e mantém a mensagem, filtrada por `summarizeGitError` (tira o resumo do fetch e as `hint:`). O pull usa `git(..., {network: true})`: `GIT_TERMINAL_PROMPT=0`, processo sem terminal de controle (`detached`, para o ssh não pedir senha na TUI) e limite de 2 minutos.
 - Depois do sucesso do checkout, `Browser` chama `reload` (cursor mantido) para o marcador HEAD acompanhar. `Browser` recebe `checkout(target)` por parâmetro, como `load`.
+
+### Busca
+
+`s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
+
+Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
 
 ### Mouse
 
