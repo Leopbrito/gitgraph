@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import type {Commit, Ref} from '../graph/types.js';
 import {formatDate} from './date.js';
 import {separator, tint, useDisplay} from './display.js';
+import {describeWorkingTree} from '../git/status.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
 /** Linhas fixas do painel, para o layout não pular ao trocar de commit. */
@@ -21,6 +22,24 @@ export function CommitDetail({commit, refs, head}: Props) {
     return (
       <Box height={DETAIL_LINES}>
         <Text dimColor>Nenhum commit para mostrar.</Text>
+      </Box>
+    );
+  }
+  if (commit.uncommitted) {
+    const parent = commit.parents[0]?.slice(0, 7);
+    return (
+      <Box flexDirection="column" height={DETAIL_LINES}>
+        <Text wrap="truncate-end" bold color={tint(display, 'yellow')}>
+          Alterações não commitadas
+        </Text>
+        <Text wrap="truncate-end" dimColor>
+          {`sobre o HEAD${parent ? ` (${parent})` : ''}`}
+        </Text>
+        <Text wrap="truncate-end">{describeWorkingTree(commit.uncommitted)}</Text>
+        <Text wrap="truncate-end" dimColor>
+          Veja o conteúdo com git status e git diff; r recarrega depois de commitar.
+        </Text>
+        <Text> </Text>
       </Box>
     );
   }

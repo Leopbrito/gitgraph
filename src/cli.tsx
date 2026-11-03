@@ -46,8 +46,8 @@ async function main() {
       loadCommits(
         cwd,
         revs.length === 0
-          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash, ...options.filters}
-          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash, ...options.filters},
+          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash, uncommitted: options.uncommitted, ...options.filters}
+          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash, uncommitted: options.uncommitted, ...options.filters},
       ),
       loadRefs(cwd),
     ]);

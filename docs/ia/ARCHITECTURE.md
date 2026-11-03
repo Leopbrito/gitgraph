@@ -39,6 +39,7 @@ src/
     log.ts         # loadCommits(): git log -> Commit[] (all/revs/paths/maxCount/order/stashes; `all` exclui o stash; repo vazio devolve [])
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
+    status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -118,11 +119,17 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
 
+### Alterações não commitadas
+
+`loadCommits({uncommitted: true})` chama `withUncommitted` depois de `withStashes`: `git rev-parse HEAD` e `loadWorkingTree` (`git status --porcelain=v2`, contado por `parseStatus`: o índice (X) conta em `staged`, a árvore (Y) em `modified`, `?` em `untracked`, `u` em `conflicted`). Sem mudanças, ou sem o HEAD na lista, nada é inserido. O nó é um `Commit` sintético (`hash: 'uncommitted'`, `uncommitted: WorkingTree`, único pai o HEAD) inserido **logo acima do HEAD**, e não no topo, pelo mesmo motivo do stash: no topo, com o HEAD fora do commit mais novo, abriria uma lane longa até ele. Se o HEAD tem stashes, o nó fica acima deles (o `while` sobe pelos stashes cujo pai é o HEAD). O desenho reaproveita o nó oco do stash (`glyphs.ts`), `GraphRowView` troca o hash por `working` e omite autor e data, e `CommitDetail` mostra um painel próprio. No `Browser`, `notACommit()` barra `Enter`/`d`, o clique duplo, `y`, `c` e `m` com um aviso, porque o hash `uncommitted` não existe no git.
+
+**`--no-optional-locks`.** O `git status` normal pode regravar o índice (atualiza o cache de stat). Com `--watch`, isso dispararia um reload, que rodaria o `status` de novo, e assim por diante. Há um teste que confere que o `mtime` do índice não muda. O custo é que o status roda a cada carga (incluindo a carga sob demanda e `r`); em repositórios enormes, `--no-uncommitted` evita a varredura de arquivos não rastreados.
+
 ### Recarga (`r` e `--watch`)
 
 `r` chama `reload(revs, limit, false, {follow: true, notice})`. Com `follow`, depois da carga o cursor vai para `followCommit(linhasAntes, selecionado, linhasDepois)`: o mesmo hash; senão o ancestral mais próximo que ainda está na lista (andando pelos pais); senão a mesma posição. As linhas "de antes" vêm de uma ref (`latest`) atualizada a cada render, porque a promessa resolve depois e o estado do closure já seria velho. O resto do fluxo é o `reload` de sempre, então um pedido mais novo descarta o anterior (`request`) e a falha vira o erro do rodapé sem trocar a lista. Os outros `reload` (checkout, merge) mantêm o cursor por posição, como antes.
 
-`--watch` liga `watchRepository` (`git/watch.ts`): `fs.watch` não recursivo no diretório git (e no comum, num worktree ligado), filtrando `HEAD`, `index`, `packed-refs` e `MERGE_HEAD`, mais um `fs.watch` recursivo em `refs/`. Um comando git mexe em vários arquivos, então os eventos têm debounce de 300 ms. O `Browser` recebe a fonte como `watch?: ChangeSource`, como `load` e `mouse`, e cada evento faz o mesmo reload do `r`. **Cuidado:** o que a TUI roda para se recarregar não pode alterar o que se observa, ou o `--watch` entra em laço. Hoje só `git log`/`for-each-ref` (somente leitura); qualquer `git status` novo deve usar `--no-optional-locks`, que impede o git de regravar o índice.
+`--watch` liga `watchRepository` (`git/watch.ts`): `fs.watch` não recursivo no diretório git (e no comum, num worktree ligado), filtrando `HEAD`, `index`, `packed-refs` e `MERGE_HEAD`, mais um `fs.watch` recursivo em `refs/`. Um comando git mexe em vários arquivos, então os eventos têm debounce de 300 ms. O `Browser` recebe a fonte como `watch?: ChangeSource`, como `load` e `mouse`, e cada evento faz o mesmo reload do `r`. **Cuidado:** o que a TUI roda para se recarregar não pode alterar o que se observa, ou o `--watch` entra em laço. Por isso o `git status` das alterações não commitadas usa `--no-optional-locks`, que impede o git de regravar o índice.
 
 ### Copiar o hash (`y`)
 

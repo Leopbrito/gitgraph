@@ -24,6 +24,8 @@ export interface CliOptions {
   paths: string[];
   /** `-C <path>`: run as if started in this directory. */
   directory: string | undefined;
+  /** Show the uncommitted changes as a node above HEAD. */
+  uncommitted: boolean;
   /** Reload the graph when the repository changes outside the TUI. */
   watch: boolean;
   /** Colors of the graph lanes from the config file (the built-in palette when absent). */
@@ -60,6 +62,7 @@ Opções:
       --date <formato> formato das datas: short (padrão), iso ou relative (há 3 dias)
       --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
       --no-stash       não mostra os stashes no grafo (--stash mostra)
+      --no-uncommitted não mostra o nó das alterações não commitadas (--uncommitted mostra)
       --watch          recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)
       --no-mouse       desliga o mouse (clique e roda); o terminal volta a selecionar texto
   -h, --help           mostra esta ajuda
@@ -106,6 +109,8 @@ export function parseCliArgs(
         compact: {type: 'boolean'},
         'no-compact': {type: 'boolean'},
         stash: {type: 'boolean'},
+        uncommitted: {type: 'boolean'},
+        'no-uncommitted': {type: 'boolean'},
         order: {type: 'string'},
         date: {type: 'string'},
         'no-stash': {type: 'boolean'},
@@ -140,7 +145,7 @@ export function parseCliArgs(
     throw new UsageError(`--date deve ser ${DATE_STYLES.join(', ')} (recebido: "${date}")`);
   }
   // `--x` / `--no-x` pair: the one given wins; if both are, the negative does.
-  const toggle = (name: 'color' | 'ascii' | 'compact' | 'stash' | 'mouse' | 'watch'): boolean | undefined =>
+  const toggle = (name: 'color' | 'ascii' | 'compact' | 'stash' | 'uncommitted' | 'mouse' | 'watch'): boolean | undefined =>
     values[`no-${name}` as 'no-color'] ? false : values[name] ? true : undefined;
   return {
     maxCount: raw === undefined ? file.maxCount : Number(raw),
@@ -151,6 +156,7 @@ export function parseCliArgs(
     date,
     order,
     stash: toggle('stash') ?? file.stash ?? true,
+    uncommitted: toggle('uncommitted') ?? file.uncommitted ?? true,
     filters: {
       ...(values.author !== undefined && {author: values.author}),
       ...(values.since !== undefined && {since: values.since}),

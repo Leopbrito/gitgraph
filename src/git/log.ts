@@ -2,6 +2,7 @@ import type {Commit} from '../graph/types.js';
 import {git} from './exec.js';
 import {parseLog} from './parse.js';
 import {loadStashes} from './stash.js';
+import {loadWorkingTree, uncommittedNode} from './status.js';
 
 // hash, pais, autor, email, data, assunto, corpo; campos separados por NUL
 // e registros por RS (0x1e).
@@ -66,11 +67,16 @@ export interface LogOptions extends LogFilters {
    * A stash whose base is not in the list is left out.
    */
   stashes?: boolean;
+  /**
+   * Show the uncommitted changes as a node right above HEAD (and above its stashes), only when
+   * there are changes and HEAD is in the list.
+   */
+  uncommitted?: boolean;
 }
 
 export async function loadCommits(
   cwd: string,
-  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false, ...filters}: LogOptions = {},
+  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false, uncommitted = false, ...filters}: LogOptions = {},
 ): Promise<Commit[]> {
   const args = ['log', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
   // With paths, git drops the commits that did not touch them; --parents makes %P show the
@@ -91,13 +97,35 @@ export async function loadCommits(
   args.push('--', ...paths);
   try {
     const commits = relink(parseLog(await git(args, cwd)), filters);
-    return stashes ? await withStashes(cwd, commits) : commits;
+    const stashed = stashes ? await withStashes(cwd, commits) : commits;
+    return uncommitted ? await withUncommitted(cwd, stashed) : stashed;
   } catch (error) {
     // Repositório recém-criado, sem commits: não é erro.
     if (error instanceof Error && /does not have any commits/.test(error.message)) {
       return [];
     }
     throw error;
+  }
+}
+
+/**
+ * Adds the uncommitted changes as one node whose parent is HEAD, placed right
+ * above it like a stash (a node at the very top would open a long lane down to
+ * HEAD when HEAD is not the newest commit). With stashes on the same commit the
+ * changes go above them. Failing to read the status must not hide the history.
+ */
+async function withUncommitted(cwd: string, commits: Commit[]): Promise<Commit[]> {
+  try {
+    const head = (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd)).trim();
+    let at = commits.findIndex(commit => commit.hash === head);
+    if (at === -1) return commits;
+    const tree = await loadWorkingTree(cwd);
+    if (!tree) return commits;
+    while (at > 0 && commits[at - 1]?.stash && commits[at - 1]?.parents[0] === head) at--;
+    return [...commits.slice(0, at), uncommittedNode(tree, head), ...commits.slice(at)];
+  } catch {
+    // No HEAD yet (empty repository) or git failed.
+    return commits;
   }
 }
 

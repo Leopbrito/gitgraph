@@ -21,9 +21,11 @@ export function formatPlain(
     })
       .map(l => `(${l.text}) `)
       .join('');
-    const line =
-      `${cellsToText(fit(node), graphWidth)} ${commit.hash.slice(0, 7)} ${labels}` +
-      `${commit.subject}  ${commit.author}, ${formatDate(commit.date, date, {now})}`;
+    // The uncommitted changes are not a commit: no hash, author or date.
+    const line = commit.uncommitted
+      ? `${cellsToText(fit(node), graphWidth)} working ${commit.subject}`
+      : `${cellsToText(fit(node), graphWidth)} ${commit.hash.slice(0, 7)} ${labels}` +
+        `${commit.subject}  ${commit.author}, ${formatDate(commit.date, date, {now})}`;
     return connector ? [line, cellsToText(fit(connector)).trimEnd()] : [line];
   });
 }

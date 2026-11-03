@@ -40,16 +40,19 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false, mat
         {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso); `*` marca os resultados da busca. */}
         <Text>{selected ? '>' : matched ? '*' : ' '}</Text>
         <Text inverse={selected}>
-          <Text dimColor>{commit.hash.slice(0, 7)} </Text>
+          <Text dimColor>{commit.uncommitted ? 'working' : commit.hash.slice(0, 7)} </Text>
           {formatRefs(refs, head).map(label => (
             <Text key={label.text} color={tint(display, label.color)} bold>
               {`(${label.text}) `}
             </Text>
           ))}
-          <Text bold={matched} color={matched ? tint(display, 'yellow') : undefined}>
+          <Text bold={matched} color={matched ? tint(display, 'yellow') : commit.uncommitted ? tint(display, 'yellow') : undefined}>
             {commit.subject}
           </Text>
-          <Text dimColor>{`  ${commit.author}, ${formatDate(commit.date, display.date ?? 'short')}`}</Text>
+          {/* The uncommitted changes have no author or date. */}
+          {!commit.uncommitted && (
+            <Text dimColor>{`  ${commit.author}, ${formatDate(commit.date, display.date ?? 'short')}`}</Text>
+          )}
         </Text>
       </Text>
       {lines.connector && (

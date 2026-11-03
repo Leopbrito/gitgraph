@@ -169,3 +169,14 @@ describe('stash nodes', () => {
     expect(cellsToText(toAscii(node)).trimEnd()).toBe('o');
   });
 });
+
+describe('nó das alterações não commitadas', () => {
+  it('é oco como o do stash, em ASCII vira o', () => {
+    const node = {...c('wip', 'a'), uncommitted: {staged: 1, modified: 0, untracked: 0, conflicted: 0}};
+    expect(draw([node, c('a')])).toEqual(['○', '●']);
+    const rows = layoutGraph([node, c('a')]);
+    const first = rows[0];
+    if (!first) throw new Error('sem linhas');
+    expect(cellsToText(toAscii(renderGraphLines(first, first.width).node)).trim()).toBe('o');
+  });
+});

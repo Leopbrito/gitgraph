@@ -1,3 +1,12 @@
+/** Files in each state of the working tree, by category (a file can be both staged and modified). */
+export interface WorkingTree {
+  staged: number;
+  modified: number;
+  untracked: number;
+  /** Unmerged paths of a merge or rebase in progress. */
+  conflicted: number;
+}
+
 export interface Commit {
   hash: string;
   parents: string[];
@@ -9,6 +18,8 @@ export interface Commit {
   body: string;
   /** A stash entry, shown as a single node above its base commit. */
   stash?: true;
+  /** The synthetic node for the uncommitted changes, shown above HEAD; not a real commit. */
+  uncommitted?: WorkingTree;
 }
 
 export type RefKind = 'branch' | 'remote' | 'tag' | 'stash';

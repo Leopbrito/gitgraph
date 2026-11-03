@@ -1144,6 +1144,74 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('uncommitted changes node', () => {
+    const withNode = (): GraphData => {
+      const real = linear(3);
+      const node: Commit = {
+        hash: 'uncommitted',
+        parents: [real[0]?.hash ?? ''],
+        author: '',
+        email: '',
+        date: '2026-03-04T10:00:00+00:00',
+        subject: 'Alterações não commitadas (1 modificado, 2 não rastreados)',
+        body: '',
+        uncommitted: {staged: 0, modified: 1, untracked: 2, conflicted: 0},
+      };
+      return {rows: layoutGraph([node, ...real]), refs};
+    };
+    const open = () => {
+      const changes = {...noChanges, files: vi.fn(() => Promise.resolve([]))};
+      const copy = vi.fn().mockResolvedValue('native');
+      const checkout = vi.fn(() => Promise.resolve());
+      const rendered = render(
+        <Browser initial={withNode()} initialLimit={100} load={vi.fn<LoadGraph>()} changes={changes} copy={copy} checkout={checkout} />,
+      );
+      return {...rendered, changes, copy, checkout};
+    };
+
+    it('shows the node on top with its counts, without author or hash', () => {
+      const {lastFrame} = open();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('working');
+      expect(frame).toContain('Alterações não commitadas (1 modificado, 2 não rastreados)');
+      expect(frame).toContain('1/4');
+      const line = frame.split('\n').find(l => l.includes('working')) ?? '';
+      expect(line).not.toContain('Ana');
+      expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    });
+
+    it('describes it in the details panel instead of a commit', () => {
+      const {lastFrame} = open();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('sobre o HEAD (h000000)');
+      expect(frame).toContain('1 modificado, 2 não rastreados');
+      expect(frame).not.toContain('@example.com');
+    });
+
+    it('does not open, copy or check out the node, and says why', async () => {
+      const {lastFrame, stdin, changes, copy, checkout} = open();
+      await press(stdin, '\r');
+      expect(lastFrame()).toContain('não há o que abrir');
+      expect(changes.files).not.toHaveBeenCalled();
+      await press(stdin, 'y');
+      expect(lastFrame()).toContain('não há hash');
+      expect(copy).not.toHaveBeenCalled();
+      await press(stdin, 'c');
+      expect(lastFrame()).toContain('não há o que fazer checkout');
+      expect(lastFrame()).not.toContain('Enter/y confirma');
+      expect(checkout).not.toHaveBeenCalled();
+      await press(stdin, 'm');
+      expect(lastFrame()).toContain('não há o que mesclar');
+    });
+
+    it('the commits under it still open normally', async () => {
+      const {lastFrame, stdin, changes} = open();
+      await press(stdin, 'j', '\r');
+      expect(changes.files).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}));
+      expect(lastFrame()).toContain('Arquivos alterados');
+    });
+  });
+
   describe('date style', () => {
     const withDate = (date: 'short' | 'iso' | 'relative') =>
       render(

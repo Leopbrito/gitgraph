@@ -11,6 +11,7 @@ describe('parseCliArgs', () => {
       date: 'short',
       order: 'date',
       stash: true,
+      uncommitted: true,
       filters: {},
       revs: [],
       paths: [],
@@ -222,5 +223,14 @@ describe('arquivo de configuração', () => {
 
   it('valida a ordem e a data que vêm do arquivo com a mesma mensagem', () => {
     expect(() => parseCliArgs([], {}, () => ({order: 'x' as 'topo'}))).toThrow('--order deve ser');
+  });
+});
+
+describe('--uncommitted', () => {
+  it('is on by default; the flags and the file turn it off and on', () => {
+    expect(parseCliArgs([]).uncommitted).toBe(true);
+    expect(parseCliArgs(['--no-uncommitted']).uncommitted).toBe(false);
+    expect(parseCliArgs([], {}, () => ({uncommitted: false})).uncommitted).toBe(false);
+    expect(parseCliArgs(['--uncommitted'], {}, () => ({uncommitted: false})).uncommitted).toBe(true);
   });
 });

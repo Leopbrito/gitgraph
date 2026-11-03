@@ -72,8 +72,8 @@ export function renderGraphLines(
 function renderNode(row: GraphRow, width: number): Cell[] {
   const cells: Cell[] = [];
   for (let c = 0; c < width; c++) {
-    // A stash is a hollow node, so it stands out from the commits.
-    const node = row.commit.stash ? '○' : '●';
+    // A stash and the uncommitted changes are hollow nodes, so they stand out from the commits.
+    const node = row.commit.stash || row.commit.uncommitted ? '○' : '●';
     const char = c === row.column ? node : c < row.lanesBefore.length ? '│' : ' ';
     const color = row.colorsBefore[c] ?? 0;
     cells.push({char, color}, {char: ' ', color});

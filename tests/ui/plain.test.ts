@@ -77,3 +77,17 @@ describe('formatPlain dates', () => {
     expect(formatPlain(rows, refs, {date: 'relative', now: new Date('2026-03-07T10:00:00Z')})[0]).toContain('Ana, há 3 dias');
   });
 });
+
+describe('formatPlain uncommitted node', () => {
+  it('prints working and the counts, without hash, author or date', () => {
+    const node: Commit = {
+      ...c('uncommitted', 'Alterações não commitadas (1 modificado)', 'aaaaaaa1'),
+      uncommitted: {staged: 0, modified: 1, untracked: 0, conflicted: 0},
+    };
+    const rows = layoutGraph([node, c('aaaaaaa1', 'one')]);
+    const refs: RefInfo = {byCommit: new Map(), head: {hash: 'aaaaaaa1', branch: 'main', merging: false}};
+    const lines = formatPlain(rows, refs);
+    expect(lines[0]).toBe('○  working Alterações não commitadas (1 modificado)');
+    expect(lines[1]).toContain('aaaaaaa (HEAD -> main) one  Ana, 2026-03-04');
+  });
+});

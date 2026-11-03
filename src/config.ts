@@ -13,6 +13,7 @@ export interface FileConfig {
   ascii?: boolean;
   color?: boolean;
   stash?: boolean;
+  uncommitted?: boolean;
   mouse?: boolean;
   watch?: boolean;
   colors?: {
@@ -54,6 +55,7 @@ const SCHEMA = {
   ascii: BOOLEAN,
   color: BOOLEAN,
   stash: BOOLEAN,
+  uncommitted: BOOLEAN,
   mouse: BOOLEAN,
   watch: BOOLEAN,
 } as const;

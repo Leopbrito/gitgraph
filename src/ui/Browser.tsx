@@ -175,6 +175,13 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     });
 
   const commit = data.rows[cursor.selected]?.commit;
+  // The uncommitted-changes node is not a commit: nothing to open, check out, merge or copy.
+  const notACommit = (what: string) =>
+    commit?.uncommitted ? (setNotice(`as alterações não commitadas não são um commit: ${what}`), true) : false;
+  const openCommit = () => {
+    if (!commit || notACommit('não há o que abrir (use git status e git diff)')) return;
+    setViewing(true);
+  };
   const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? [];
 
   const runCheckout = (target: CheckoutTarget) => {
@@ -270,7 +277,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       if (index === null) return;
       if (notice) setNotice(null);
       select(index);
-      if (isDoubleClick(index)) setViewing(true);
+      if (isDoubleClick(index)) openCommit();
     } else {
       select(cursor.selected + (event.type === 'wheelUp' ? -WHEEL_STEP : WHEEL_STEP));
     }
@@ -392,8 +399,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (key.pageUp) select(cursor.selected - pageSize);
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
-    else if ((key.return || input === 'd') && commit) setViewing(true);
-    else if (input === 'y' && commit) {
+    else if (key.return || input === 'd') openCommit();
+    else if (input === 'y' && commit && !notACommit('não há hash')) {
       const hash = commit.hash;
       if (!copy) setNotice(`hash: ${hash}`);
       else {
@@ -419,7 +426,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (input === 'm' && !loading) {
       const head = data.refs.head;
       if (head.merging) manageMerge();
-      else if (!commit) return;
+      else if (!commit || notACommit('não há o que mesclar')) return;
       else if (commit.stash) setNotice('um stash não pode ser mesclado');
       else if (head.branch === null) setNotice('HEAD destacado: troque para uma branch antes do merge');
       else if (commit.hash === head.hash) setNotice('esse já é o commit da branch atual');
@@ -428,6 +435,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         setMergePrompt({targets: mergeTargets(commit.hash, refsOf(commit.hash), head.branch), index: 0});
       }
     }
+    else if (input === 'c' && notACommit('não há o que fazer checkout')) return;
     else if (input === 'c' && commit?.stash) setNotice('um stash não pode ser usado em checkout');
     else if (input === 'c' && commit && !loading) {
       const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
