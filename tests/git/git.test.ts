@@ -24,6 +24,17 @@ describe('repositório vazio', () => {
   });
 });
 
+describe('mensagens com caracteres de controle', () => {
+  it('carrega commits cujo corpo tem RS, US e SOH', async () => {
+    const {dir, run} = repo();
+    run('commit', '--allow-empty', '-q', '-m', 'primeiro', '-m', 'corpo com \x1e RS, \x1f US e \x01 SOH');
+    run('commit', '--allow-empty', '-q', '-m', 'segundo');
+    const commits = await loadCommits(dir);
+    expect(commits.map(c => c.subject)).toEqual(['segundo', 'primeiro']);
+    expect(commits[1]?.body).toBe('corpo com \x1e RS, \x1f US e \x01 SOH');
+  });
+});
+
 describe('repositório com branch e merge', () => {
   it('lê commits, pais e refs', async () => {
     const {dir, run} = repo();

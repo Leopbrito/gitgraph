@@ -4,9 +4,9 @@ import {parseLog} from './parse.js';
 import {loadStashes} from './stash.js';
 import {loadWorkingTree, uncommittedNode} from './status.js';
 
-// hash, pais, autor, email, data, assunto, corpo; campos separados por NUL
-// e registros por RS (0x1e).
-const LOG_FORMAT = '%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e';
+// hash, parents, author, email, date, subject, body. Used with `git log -z`, so every
+// field is NUL-delimited: a commit message cannot contain NUL, but it may hold any other byte.
+export const LOG_FORMAT = '%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b';
 
 /**
  * How `git log` orders the commits. All of them show no parent before its
@@ -78,7 +78,7 @@ export async function loadCommits(
   cwd: string,
   {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false, uncommitted = false, ...filters}: LogOptions = {},
 ): Promise<Commit[]> {
-  const args = ['log', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
+  const args = ['log', '-z', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
   // With paths, git drops the commits that did not touch them; --parents makes %P show the
   // surviving parents instead of the original ones, so the layout does not wait for lost commits.
   if (paths.length > 0) args.push('--parents');
@@ -159,7 +159,7 @@ async function withStashes(cwd: string, commits: Commit[]): Promise<Commit[]> {
     if (entries.length === 0) return commits;
     const read = parseLog(
       await git(
-        ['log', '--no-walk=unsorted', `--format=${LOG_FORMAT}`, ...entries.map(e => e.hash), '--'],
+        ['log', '-z', '--no-walk=unsorted', `--format=${LOG_FORMAT}`, ...entries.map(e => e.hash), '--'],
         cwd,
       ),
     );

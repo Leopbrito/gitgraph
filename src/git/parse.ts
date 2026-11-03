@@ -1,27 +1,36 @@
 import type {Commit} from '../graph/types.js';
 
-/** Separadores usados em LOG_FORMAT (ver log.ts). */
-export const FIELD_SEP = '\0';
-export const RECORD_SEP = '\x1e';
+/** Fields per commit in LOG_FORMAT (see log.ts); `git log -z` ends each commit with a NUL too. */
+const FIELDS = 7;
 
+/**
+ * Parses `git log -z --format=<LOG_FORMAT>`: every field is NUL-terminated or
+ * NUL-separated, and a commit message cannot contain NUL, so no message text
+ * (control characters included) can be mistaken for a separator.
+ */
 export function parseLog(text: string): Commit[] {
+  const tokens = text.split('\0');
+  // The output ends with the NUL that terminates the last commit.
+  if (tokens.at(-1) === '') tokens.pop();
+  if (tokens.length % FIELDS !== 0) {
+    throw new Error(`Registro de commit inválido: ${JSON.stringify(tokens.at(-1) ?? '')}`);
+  }
   const commits: Commit[] = [];
-  for (const record of text.split(RECORD_SEP)) {
-    const trimmed = record.replace(/^\n+/, '');
-    if (trimmed === '') continue;
-    const [hash, parents, author, email, date, subject, body] =
-      trimmed.split(FIELD_SEP);
-    if (!hash || date === undefined) {
-      throw new Error(`Registro de commit inválido: ${JSON.stringify(trimmed)}`);
+  for (let i = 0; i < tokens.length; i += FIELDS) {
+    const [hash, parents, author, email, date, subject, body] = tokens.slice(i, i + FIELDS) as [
+      string, string, string, string, string, string, string,
+    ];
+    if (!hash || date === '') {
+      throw new Error(`Registro de commit inválido: ${JSON.stringify(tokens.slice(i, i + FIELDS).join('\0'))}`);
     }
     commits.push({
       hash,
       parents: parents ? parents.split(' ') : [],
-      author: author ?? '',
-      email: email ?? '',
+      author,
+      email,
       date,
-      subject: subject ?? '',
-      body: (body ?? '').trim(),
+      subject,
+      body: body.trim(),
     });
   }
   return commits;
