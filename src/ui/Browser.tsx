@@ -158,6 +158,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     [data.rows],
   );
   const total = data.rows.length;
+  // The limit is on commits: the stash and uncommitted-changes nodes are extra rows, so they must
+  // not make a list that git did not fill look full.
+  const commitCount = useMemo(
+    () => data.rows.filter(row => !row.commit.stash && !row.commit.uncommitted).length,
+    [data.rows],
+  );
   const visibleCols = visibleColumns(graphWidth, columns);
   const clipped = visibleCols < graphWidth;
   const graphStart = clampOffset(graphOffset, graphWidth, visibleCols);
@@ -202,12 +208,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const canGrow = maxCommits === undefined || limit < maxCommits;
   useEffect(() => {
     if (loading || error) return;
-    if (canGrow && total >= limit && cursor.selected >= total - LOAD_AHEAD) {
+    if (canGrow && commitCount >= limit && cursor.selected >= total - LOAD_AHEAD) {
       const next = Math.min(limit * 2, maxCommits ?? Infinity);
       setLimit(next);
       reload(revs, next, false);
     }
-  }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, revs, reload]);
+  }, [loading, error, canGrow, total, commitCount, limit, maxCommits, cursor.selected, revs, reload]);
 
   useEffect(() => {
     if (!seeking || loading) return;
@@ -216,7 +222,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     if (found !== undefined) {
       setSeeking(null);
       select(found);
-    } else if (canGrow && total >= limit) {
+    } else if (canGrow && commitCount >= limit) {
       const next = Math.min(limit * 2, maxCommits ?? Infinity);
       setLimit(next);
       reload(revs, next, false);
@@ -232,7 +238,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         setQuery('');
       }
     }
-  }, [seeking, loading, error, matches, canGrow, total, limit, maxCommits, revs, reload]);
+  }, [seeking, loading, error, matches, canGrow, commitCount, limit, maxCommits, revs, reload]);
 
   const select = (index: number) => {
     const selected = clamp(index, 0, Math.max(0, total - 1));
@@ -724,7 +730,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       : revs.length <= 2
         ? revs.join(', ')
         : `${revs.slice(0, 2).join(', ')} +${revs.length - 2}`;
-  const more = canGrow && total >= limit;
+  const more = canGrow && commitCount >= limit;
   const confirmHint = (count: number) =>
     count === 1
       ? `Enter/y confirma ${dot} Esc/n cancela`

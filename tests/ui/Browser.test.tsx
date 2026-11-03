@@ -190,6 +190,21 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('/40+');
   });
 
+  it('does not count the stash and uncommitted nodes against the limit', async () => {
+    // 29 real commits plus the uncommitted node and a stash: 31 rows, but git did not fill the limit of 30.
+    const real = linear(29);
+    const node: Commit = {...commit(900, [real[0]!.hash]), hash: 'uncommitted', uncommitted: {staged: 0, modified: 1, untracked: 0, conflicted: 0}};
+    const stash: Commit = {...commit(901, [real[0]!.hash]), stash: true};
+    const rows = layoutGraph([node, stash, ...real]);
+    const load = vi.fn<LoadGraph>();
+    const {lastFrame, stdin} = render(<Browser initial={{rows, refs}} initialLimit={30} load={load} />);
+    await press(stdin, 'G');
+    await tick();
+    expect(load).not.toHaveBeenCalled();
+    expect(lastFrame()).toContain('31/31');
+    expect(lastFrame()).not.toContain('31/31+');
+  });
+
   it('não busca nada quando o teto já foi atingido de início', async () => {
     const load = vi.fn<LoadGraph>();
     const {stdin} = render(<Browser initial={data(30)} initialLimit={30} maxCommits={30} load={load} />);
