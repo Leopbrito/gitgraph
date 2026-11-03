@@ -295,6 +295,19 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('h000002');
     });
 
+    it('says to wait when c or m is pressed during a load, instead of ignoring the key', async () => {
+      // The initial reload never finishes, so the list stays busy.
+      const load = vi.fn<LoadGraph>(() => new Promise(() => {}));
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
+      await press(stdin, 'r');
+      expect(lastFrame()).toContain('carregando');
+      await press(stdin, 'j', 'c');
+      expect(lastFrame()).toContain('espere a carga terminar');
+      await press(stdin, 'j', 'm');
+      expect(lastFrame()).toContain('espere a carga terminar');
+      expect(lastFrame()).not.toContain('Checkout para');
+    });
+
     it('stays busy until the checkout itself finishes, even if an earlier reload ends first', async () => {
       let finishCheckout: () => void = () => {};
       const checkout = vi.fn(() => new Promise<void>(resolve => (finishCheckout = resolve)));

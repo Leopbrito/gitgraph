@@ -683,7 +683,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       }
     }
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
-    else if (input === 'm' && !loading) {
+    else if ((input === 'm' || input === 'c') && loading) setNotice('espere a carga terminar');
+    else if (input === 'm') {
       const head = data.refs.head;
       if (head.operation && head.operation !== 'merge') manageOperation(head.operation);
       else if (head.merging) manageMerge();
@@ -698,7 +699,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     }
     else if (input === 'c' && notACommit('não há o que fazer checkout')) return;
     else if (input === 'c' && commit?.stash) setNotice('um stash não pode ser usado em checkout');
-    else if (input === 'c' && commit && !loading) {
+    else if (input === 'c' && commit) {
       const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips, data.refs.remotes);
       const only = targets.length === 1 ? targets[0] : undefined;
       if (only && isCurrent(only, data.refs.head)) {
