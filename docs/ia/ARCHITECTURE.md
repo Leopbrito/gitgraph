@@ -6,6 +6,14 @@
 
 CLI que lê um repositório git e renderiza no terminal o grafo de branches e commits.
 
+## Escopo (decisão)
+
+O `gitgraph` é um **visualizador de histórico com um conjunto pequeno de ações**, não um cliente git completo: não compete com o lazygit ou o tig. O critério para uma ação entrar é: **a) o resultado se enxerga no grafo** (um nó, uma ref ou o HEAD muda) e **b) uma só pergunta basta** (confirmar, digitar um nome, escolher uma ref), sem fluxo de várias telas que o usuário teria de entender por dentro. Entram: checkout, merge, stash (apply/pop/drop), criar/renomear/apagar branches e tags, fetch, cherry-pick, revert e reset (issue #12).
+
+**Fora de propósito: iniciar um rebase.** Ele reescreve vários commits de uma vez e para em **conflitos em série** (um por commit), e o interativo (`-i`) é um editor de lista de tarefas, o que exige uma tela de edição que é justamente o que o projeto não quer ser. Com o merge, o cherry-pick e o revert, um conflito é um evento isolado e o diálogo (abortar ou deixar) basta; no rebase seriam N eventos, com `--continue` e `--skip` entre eles, e o grafo mudaria a cada passo. Quem quiser rebase usa o terminal, e o `gitgraph` ajuda a olhar o resultado (`r`, `--watch`).
+
+**O que entra em vez disso: operações já em andamento.** Um rebase (ou cherry-pick, revert, merge) iniciado fora da TUI, ou parado por conflitos, é detectado (`operationInProgress`: `rebase-merge/` e `rebase-apply/` no diretório git, `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `MERGE_HEAD`; o rebase vem primeiro porque, parado num commit, também deixa `CHERRY_PICK_HEAD`). O cabeçalho mostra `(rebase em andamento)` em amarelo e `m` abre um diálogo com **abortar, continuar, pular o passo ou deixar em andamento** (`OperationPrompt`). Assim não se fica preso a uma tela sem saída, e a TUI nunca começa o que não sabe acompanhar. Se a decisão mudar (por exemplo, um `git rebase <base>` simples com esse mesmo diálogo), a base já existe: bastaria um `git/rebase.ts` e uma tecla.
+
 ## Stack
 
 - **UI:** React + [Ink](https://github.com/vadimdemedes/ink)
@@ -42,6 +50,7 @@ src/
     status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
     fetch.ts       # fetchAll(): `git fetch --all --prune` com `network: true`; traduz falha de autenticação
     refsEdit.ts    # RefActions/gitRefActions(): validar, criar, renomear e apagar branches e tags; UnmergedBranchError
+    operation.ts   # Operation, operationInProgress(), OperationActions/gitOperationActions(): abort/continue/skip de merge, cherry-pick, revert e rebase parados
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n}); runStash() (apply/pop/drop) e StashConflictError
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -67,6 +76,7 @@ src/
     MergePrompt.tsx # confirmação do merge (idem)
     RefManager.tsx # criar/renomear/apagar branch e tag: máquina de passos que ocupa o painel e trata as próprias teclas
     refTargets.ts  # refTargets(): que refs de um commit dá para renomear/apagar (puro)
+    OperationPrompt.tsx # operação parada (cherry-pick, revert, rebase): abortar, continuar, pular ou deixar
     ConfirmPrompt.tsx # pergunta sim/não genérica (título e linhas), usada no drop de stash
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
@@ -123,6 +133,10 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 `s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
+
+### Operações em andamento
+
+`loadRefs` guarda `head.operation` (uma `Operation`: `merge`, `cherry-pick`, `revert` ou `rebase`) e `head.merging` (verdadeiro só para o merge, que tem seu diálogo mais antigo, com abortar/deixar). Para as demais, o `Browser` mantém `stopped` (`{op, files, index}`) e renderiza `OperationPrompt` no lugar do painel; as opções vêm de `operationOptions(op)` (o `skip` só existe quando `canSkip`: merge não tem passos). `runOperation` chama `OperationActions` (`abort`, `proceed`, `skip`, injetadas como `load`) e **sempre recarrega**, também na falha, porque o estado pode ter mudado (um passo seguinte parou em novos conflitos); o erro é posto depois do `reload`, que o limparia. `proceed` é `git <op> --continue` com `GIT_EDITOR=true` e `GIT_SEQUENCE_EDITOR=true` (`GitOptions.env`): sem isso o git abriria um editor dentro da TUI e travaria; a mensagem usada é a do próprio git. Enquanto o diálogo está aberto, as teclas da lista e o mouse ficam inertes.
 
 ### Branches e tags (`b`, `t`, `T`, `R`, `D`)
 

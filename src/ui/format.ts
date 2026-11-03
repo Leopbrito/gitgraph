@@ -42,7 +42,13 @@ export function formatRefs(refs: Ref[], head: HeadInfo): Label[] {
  * from its upstream (`↑2 ↓3`; `^2 v3` in ASCII) and whether a merge is in progress.
  */
 export function headLabel(
-  head: {hash: string | null; branch: string | null; merging?: boolean; upstream?: {ahead: number; behind: number}},
+  head: {
+    hash: string | null;
+    branch: string | null;
+    merging?: boolean;
+    operation?: string;
+    upstream?: {ahead: number; behind: number};
+  },
   {ascii = false}: {ascii?: boolean} = {},
 ): string {
   const where = head.branch ?? (head.hash ? `HEAD destacado em ${head.hash.slice(0, 7)}` : 'sem commits');
@@ -50,5 +56,6 @@ export function headLabel(
   const [up, down] = ascii ? ['^', 'v'] : ['↑', '↓'];
   const distance = [ahead > 0 && `${up}${ahead}`, behind > 0 && `${down}${behind}`].filter(Boolean).join(' ');
   const label = distance === '' ? where : `${where} ${distance}`;
-  return head.merging ? `${label} (merge em andamento)` : label;
+  const operation = head.operation ?? (head.merging ? 'merge' : undefined);
+  return operation ? `${label} (${operation} em andamento)` : label;
 }

@@ -1,6 +1,6 @@
 import type {Ref, RefKind} from '../graph/types.js';
 import {git} from './exec.js';
-import {mergeInProgress} from './merge.js';
+import {operationInProgress, type Operation} from './operation.js';
 import {loadStashes} from './stash.js';
 
 /** How the current branch compares with the branch it tracks. */
@@ -26,7 +26,14 @@ export interface RefInfo {
    * HEAD's commit (null in a repository without commits), the current branch
    * (null when detached) and whether a merge is in progress.
    */
-  head: {hash: string | null; branch: string | null; merging?: boolean; upstream?: Upstream};
+  head: {
+    hash: string | null;
+    branch: string | null;
+    merging?: boolean;
+    /** Any operation stopped in the repository (a merge, cherry-pick, revert or rebase). */
+    operation?: Operation;
+    upstream?: Upstream;
+  };
 }
 
 const FORMAT = '%(objectname)%00%(*objectname)%00%(refname)';
@@ -82,7 +89,11 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
     byCommit.set(stashHash, list);
   }
   const upstream = branch === null ? undefined : await loadUpstream(cwd);
-  return {byCommit, head: {hash, branch, merging: await mergeInProgress(cwd), ...(upstream && {upstream})}};
+  const operation = await operationInProgress(cwd);
+  return {
+    byCommit,
+    head: {hash, branch, merging: operation === 'merge', ...(operation && {operation}), ...(upstream && {upstream})},
+  };
 }
 
 /**

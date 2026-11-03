@@ -11,9 +11,11 @@ export interface GitOptions {
    * limit. Credentials must be available non-interactively (agent, helper).
    */
   network?: boolean;
+  /** Extra environment variables for this command (e.g. `GIT_EDITOR` so no editor opens inside the TUI). */
+  env?: Record<string, string>;
 }
 
-export function git(args: string[], cwd: string, {network = false}: GitOptions = {}): Promise<string> {
+export function git(args: string[], cwd: string, {network = false, env}: GitOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       'git',
@@ -23,7 +25,7 @@ export function git(args: string[], cwd: string, {network = false}: GitOptions =
         maxBuffer: 256 * 1024 * 1024,
         // Mensagens de erro em inglês, para o código poder reconhecê-las em
         // qualquer idioma do sistema.
-        env: {...process.env, LC_ALL: 'C', ...(network ? {GIT_TERMINAL_PROMPT: '0'} : {})},
+        env: {...process.env, LC_ALL: 'C', ...(network ? {GIT_TERMINAL_PROMPT: '0'} : {}), ...env},
         ...(network ? {detached: true, timeout: NETWORK_TIMEOUT_MS} : {}),
       },
       (error, stdout, stderr) => {

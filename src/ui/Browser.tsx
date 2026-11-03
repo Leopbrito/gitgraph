@@ -18,6 +18,7 @@ import {
 import type {CopyMethod} from '../clipboard.js';
 import type {ChangesActions} from '../git/changes.js';
 import type {ChangeSource} from '../git/watch.js';
+import {canSkip, type Operation, type OperationActions} from '../git/operation.js';
 import type {RefActions} from '../git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../git/stash.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
@@ -34,6 +35,7 @@ import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
 import {followCommit} from './follow.js';
+import {OperationPrompt, operationOptions, type OperationChoice} from './OperationPrompt.js';
 import {RefManager} from './RefManager.js';
 import {refTargets, type RefMode} from './refTargets.js';
 import {SearchPrompt} from './SearchPrompt.js';
@@ -79,6 +81,8 @@ interface Props {
   stash?: (op: StashOp, hash: string) => Promise<string>;
   /** Creates, renames and deletes branches and tags (keys b, t, T, R, D). */
   refEdit?: RefActions;
+  /** Abort, continue or skip a stopped cherry-pick, revert or rebase. */
+  operation?: OperationActions;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -95,7 +99,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash, refEdit}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash, refEdit, operation}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -115,6 +119,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [refMode, setRefMode] = useState<RefMode | null>(null);
+  // A stopped cherry-pick, revert or rebase (a merge has its own, older dialog).
+  const [stopped, setStopped] = useState<{op: Operation; files: string[]; index: number} | null>(null);
   // Dropping a stash is the only stash action that asks first: apply and pop keep the changes.
   const [dropping, setDropping] = useState<{hash: string; name: string} | null>(null);
   // Active search (highlight, n/N); `typing` is set while the input is open.
@@ -272,6 +278,33 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       });
   };
 
+  /** Opens the dialog for the operation the repository is stopped in. */
+  const manageOperation = (op: Operation) => {
+    if (!operation) return setNotice(`${op} em andamento: resolva no terminal`);
+    operation
+      .conflicts()
+      .then(files => setStopped({op, files, index: 0}))
+      .catch(e => setError(failure(e)));
+  };
+
+  const runOperation = (op: Operation, choice: OperationChoice) => {
+    setStopped(null);
+    if (choice === 'leave' || !operation) {
+      setNotice(`${op} deixado em andamento: resolva no terminal ou aperte m para voltar aqui`);
+      return;
+    }
+    const done = {abort: 'abortado', proceed: 'continuado', skip: 'passo pulado'}[choice];
+    setLoading(true);
+    setError(null);
+    operation[choice === 'proceed' ? 'proceed' : choice](op)
+      .then(() => reload(revs, limit, false, {follow: true, notice: `${op} ${done}`}))
+      .catch(e => {
+        // The state may have changed even so (a later step stopped on new conflicts): refresh it.
+        reload(revs, limit, false);
+        setError(failure(e));
+      });
+  };
+
   const stashName = (hash: string) => refsOf(hash).find(r => r.kind === 'stash')?.name ?? 'o stash';
 
   const runStash = (op: StashOp, hash: string) => {
@@ -313,7 +346,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode) return;
+    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -337,6 +370,17 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
 
     // The ref manager handles its own keys.
     if (refMode) return;
+
+    if (stopped) {
+      const options = operationOptions(stopped.op);
+      const picked = options.find(o => o.key === input);
+      if (key.escape) runOperation(stopped.op, 'leave');
+      else if (picked) runOperation(stopped.op, picked.choice);
+      else if (key.return) runOperation(stopped.op, options[stopped.index]?.choice ?? 'leave');
+      else if (key.upArrow) setStopped({...stopped, index: clamp(stopped.index - 1, 0, options.length - 1)});
+      else if (key.downArrow) setStopped({...stopped, index: clamp(stopped.index + 1, 0, options.length - 1)});
+      return;
+    }
 
     if (dropping) {
       if (key.escape || input === 'n') setDropping(null);
@@ -517,7 +561,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
     else if (input === 'm' && !loading) {
       const head = data.refs.head;
-      if (head.merging) manageMerge();
+      if (head.operation && head.operation !== 'merge') manageOperation(head.operation);
+      else if (head.merging) manageMerge();
       else if (!commit || notACommit('não há o que mesclar')) return;
       else if (commit.stash) setNotice('um stash não pode ser mesclado');
       else if (head.branch === null) setNotice('HEAD destacado: troque para uma branch antes do merge');
@@ -567,6 +612,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     ? confirmHint(prompt.targets.length)
     : mergePrompt
       ? confirmHint(mergePrompt.targets.length)
+      : stopped
+        ? `a aborta ${dot} c continua${canSkip(stopped.op) ? ` ${dot} s pula` : ''} ${dot} d/Esc deixa ${dot} ${arrows}/Enter escolhe`
       : refMode
         ? `Esc cancela`
       : dropping
@@ -598,7 +645,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       <Text wrap="truncate-end">
         <Text bold>gitgraph</Text>
         <Text dimColor>{` ${dot} atual: `}</Text>
-        <Text bold color={tint(display, data.refs.head.merging ? 'yellow' : 'cyan')}>
+        <Text bold color={tint(display, data.refs.head.operation || data.refs.head.merging ? 'yellow' : 'cyan')}>
           {headLabel(data.refs.head, {ascii: display.ascii})}
         </Text>
         {query !== '' && (
@@ -637,6 +684,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           index={mergePrompt.index}
           branch={data.refs.head.branch ?? ''}
         />
+      ) : stopped ? (
+        <OperationPrompt operation={stopped.op} files={stopped.files} index={stopped.index} />
       ) : refMode && refEdit && commit ? (
         <RefManager
           mode={refMode}

@@ -6,6 +6,7 @@ import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
 import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
+import type {Operation, OperationActions} from '../../src/git/operation.js';
 import type {RefActions} from '../../src/git/refsEdit.js';
 import {StashConflictError, type StashOp} from '../../src/git/stash.js';
 import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
@@ -1220,6 +1221,105 @@ describe('Browser', () => {
     );
     expect(lastFrame()).toContain('main, feature');
     expect(lastFrame()).not.toContain('todas as branches');
+  });
+
+  describe('operation in progress (cherry-pick, revert, rebase)', () => {
+    const during = (operation: Operation): GraphData => ({
+      rows: layoutGraph(linear(3)),
+      refs: {...refs, head: {...refs.head, operation, merging: false}},
+    });
+    const actions = (over: Partial<OperationActions> = {}): OperationActions => ({
+      abort: vi.fn().mockResolvedValue(undefined),
+      proceed: vi.fn().mockResolvedValue(undefined),
+      skip: vi.fn().mockResolvedValue(undefined),
+      conflicts: vi.fn().mockResolvedValue(['a.txt', 'b.txt', 'c.txt']),
+      ...over,
+    });
+    const open = (op: Operation, act = actions(), load = vi.fn<LoadGraph>().mockResolvedValue(during(op))) => {
+      const rendered = render(<Browser initial={during(op)} initialLimit={100} load={load} operation={act} />);
+      return {...rendered, act, load};
+    };
+
+    it('the header says which operation is stopped', () => {
+      expect(open('rebase').lastFrame()).toContain('atual: main (rebase em andamento)');
+      expect(open('cherry-pick').lastFrame()).toContain('(cherry-pick em andamento)');
+    });
+
+    it('m opens the dialog with the files and the options, skip included', async () => {
+      const {stdin, lastFrame} = open('rebase');
+      await press(stdin, 'm');
+      await tick();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('rebase com conflitos (3 arquivos): a.txt, b.txt +1');
+      expect(frame).toContain('> Abortar o rebase (git rebase --abort)');
+      expect(frame).toContain('Continuar (git rebase --continue)');
+      expect(frame).toContain('Pular este passo (git rebase --skip)');
+      expect(frame).toContain('a aborta');
+    });
+
+    it.each([
+      ['a', 'abort', 'rebase abortado'],
+      ['c', 'proceed', 'rebase continuado'],
+      ['s', 'skip', 'rebase passo pulado'],
+    ] as const)('%s runs %s, reloads and says what happened', async (key, method, message) => {
+      const {stdin, lastFrame, act, load} = open('rebase');
+      await press(stdin, 'm');
+      await tick();
+      await press(stdin, key);
+      await tick();
+      expect(act[method]).toHaveBeenCalledWith('rebase');
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain(message);
+    });
+
+    it('Enter runs the highlighted option and the arrows move it', async () => {
+      const {stdin, act} = open('revert');
+      await press(stdin, 'm');
+      await tick();
+      await press(stdin, '\u001B[B', '\r');
+      await tick();
+      expect(act.proceed).toHaveBeenCalledWith('revert');
+      expect(act.abort).not.toHaveBeenCalled();
+    });
+
+    it('d and Esc leave it in progress without running anything', async () => {
+      for (const key of ['d', '\u001B']) {
+        const {stdin, lastFrame, act, load} = open('cherry-pick');
+        await press(stdin, 'm');
+        await tick();
+        await press(stdin, key);
+        expect(lastFrame()).toContain('cherry-pick deixado em andamento');
+        expect(act.abort).not.toHaveBeenCalled();
+        expect(load).not.toHaveBeenCalled();
+      }
+    });
+
+    it('a failure shows the reason, refreshes the state and keeps going', async () => {
+      const proceed = vi.fn().mockRejectedValue(new Error('error: you must resolve conflicts first'));
+      const {stdin, lastFrame, load} = open('rebase', actions({proceed}));
+      await press(stdin, 'm');
+      await tick();
+      await press(stdin, 'c');
+      await tick();
+      expect(lastFrame()).toContain('erro: you must resolve conflicts first');
+      expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it('without conflicts it says the step is ready to continue', async () => {
+      const {stdin, lastFrame} = open('rebase', actions({conflicts: vi.fn().mockResolvedValue([])}));
+      await press(stdin, 'm');
+      await tick();
+      expect(lastFrame()).toContain('rebase em andamento: sem conflitos pendentes');
+    });
+
+    it('ignores the list keys and the mouse while the dialog is open', async () => {
+      const {stdin, lastFrame} = open('rebase');
+      await press(stdin, 'm');
+      await tick();
+      await press(stdin, 'j', 'q');
+      expect(lastFrame()).toContain('Abortar o rebase');
+      expect(lastFrame()).toContain('1/3');
+    });
   });
 
   describe('branches and tags (b, t, T, R, D)', () => {
