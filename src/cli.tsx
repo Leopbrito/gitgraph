@@ -8,6 +8,7 @@ import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
+import {enableTerminalMouse} from './terminalMouse.js';
 import {layoutGraph} from './graph/layout.js';
 import {Browser, type LoadGraph} from './ui/Browser.js';
 import {DisplayContext} from './ui/display.js';
@@ -62,25 +63,31 @@ async function main() {
   const load: LoadGraph = (revs, limit) => graph(revs, limit);
   const initialLimit = options.maxCount ?? DEFAULT_LIMIT;
   const initial = await load([], initialLimit);
-  const {waitUntilExit} = render(
-    <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact}}>
-      <Browser
-        initial={initial}
-        initialLimit={initialLimit}
-        maxCommits={options.maxCount}
-        load={load}
-        checkout={target => checkout(cwd, target)}
-        changes={gitChanges(cwd)}
-        merge={{
-          merge: target => mergeInto(cwd, target),
-          abort: () => abortMerge(cwd),
-          conflicts: () => conflictedFiles(cwd),
-        }}
-      />
-    </DisplayContext.Provider>,
-    {alternateScreen: true},
-  );
-  await waitUntilExit();
+  const terminalMouse = options.mouse ? enableTerminalMouse(process.stdin, process.stdout) : undefined;
+  try {
+    const {waitUntilExit} = render(
+      <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact}}>
+        <Browser
+          initial={initial}
+          initialLimit={initialLimit}
+          maxCommits={options.maxCount}
+          load={load}
+          checkout={target => checkout(cwd, target)}
+          changes={gitChanges(cwd)}
+          merge={{
+            merge: target => mergeInto(cwd, target),
+            abort: () => abortMerge(cwd),
+            conflicts: () => conflictedFiles(cwd),
+          }}
+          mouse={terminalMouse?.source}
+        />
+      </DisplayContext.Provider>,
+      {alternateScreen: true},
+    );
+    await waitUntilExit();
+  } finally {
+    terminalMouse?.dispose();
+  }
 }
 
 main().catch(error => {

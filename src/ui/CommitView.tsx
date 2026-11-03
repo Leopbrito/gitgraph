@@ -1,21 +1,28 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import type {ChangedFile, ChangesActions} from '../git/changes.js';
 import type {Commit, Ref} from '../graph/types.js';
 import {separator, tint, useDisplay} from './display.js';
 import {DiffView} from './DiffView.js';
 import {formatRefs, type HeadInfo} from './format.js';
+import type {MouseEvent, MouseSource} from './mouse.js';
 import {keepVisible, scrollBy, wrapText} from './scroll.js';
+import {useDoubleClick} from './useDoubleClick.js';
 import {clamp} from './viewport.js';
 
 // Header (3 lines), separator, footer and the Browser's spare line.
 const CHROME_LINES = 5;
+// Lines above the area (header, author line, subject and rule).
+const AREA_TOP = 4;
+// Lines moved per wheel notch.
+const WHEEL_STEP = 3;
 
 interface Props {
   commit: Commit;
   refs: Ref[];
   head: HeadInfo;
   changes: ChangesActions;
+  mouse?: MouseSource;
   onClose: () => void;
 }
 
@@ -24,7 +31,7 @@ type Focus = 'message' | 'files';
 const oneLine = (message: string) => message.replace(/\s+/g, ' ').trim();
 
 /** Full-screen view of what a commit changed: message, files and the diff. */
-export function CommitView({commit, refs, head, changes, onClose}: Props) {
+export function CommitView({commit, refs, head, changes, mouse, onClose}: Props) {
   const display = useDisplay();
   const dot = separator(display);
   const {columns, rows: terminalRows} = useWindowSize();
@@ -62,6 +69,40 @@ export function CommitView({commit, refs, head, changes, onClose}: Props) {
   const fileOffset = keepVisible(file.offset, file.selected, filesHeight);
 
   const openDiff = (target?: ChangedFile) => setDiff({target});
+
+  const isDoubleClick = useDoubleClick();
+  // Always the latest closure, so the subscription is made only once.
+  const onMouse = useRef<(event: MouseEvent) => void>(() => {});
+  onMouse.current = event => {
+    // The diff has the screen while it is open.
+    if (diff) return;
+    const bodyTop = AREA_TOP + 1;
+    // Past the message: its height, plus the files heading.
+    const filesTop = body.length > 0 ? bodyTop + bodyHeight + 1 : bodyTop;
+    const inBody = body.length > 0 && event.row >= bodyTop && event.row < filesTop - 1;
+    const inFiles = event.row >= filesTop && event.row < filesTop + filesHeight;
+    const selectFile = (index: number) =>
+      setFile({selected: clamp(index, 0, Math.max(0, fileCount - 1)), offset: fileOffset});
+    if (event.type === 'click') {
+      if (inBody) {
+        setFocus('message');
+      } else if (inFiles) {
+        const index = fileOffset + event.row - filesTop;
+        if (index >= fileCount) return;
+        setFocus('files');
+        selectFile(index);
+        if (isDoubleClick(index)) openDiff(files?.[index]);
+      }
+    } else {
+      const delta = event.type === 'wheelUp' ? -WHEEL_STEP : WHEEL_STEP;
+      if (inBody) setBodyScroll(scrollBy(bodyOffset, delta, body.length, bodyHeight));
+      else if (inFiles) {
+        setFocus('files');
+        selectFile(file.selected + delta);
+      }
+    }
+  };
+  useEffect(() => mouse?.subscribe(event => onMouse.current(event)), [mouse]);
 
   useInput((input, key) => {
     if (key.escape || input === 'q') onClose();

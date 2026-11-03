@@ -10,6 +10,7 @@ describe('parseCliArgs', () => {
       compact: false,
       order: 'date',
       stash: true,
+      mouse: true,
       help: false,
       version: false,
     });
@@ -58,6 +59,11 @@ describe('parseCliArgs', () => {
 
   it.each(['topological', '', 'DATE'])('rejects --order %j', value => {
     expect(() => parseCliArgs([`--order=${value}`])).toThrow(/--order deve ser date, author-date, topo/);
+  });
+
+  it('enables the mouse by default and turns it off with --no-mouse', () => {
+    expect(parseCliArgs([]).mouse).toBe(true);
+    expect(parseCliArgs(['--no-mouse']).mouse).toBe(false);
   });
 
   it('shows stashes by default and hides them with --no-stash', () => {

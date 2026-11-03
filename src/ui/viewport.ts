@@ -16,6 +16,23 @@ export function visibleEnd(heights: number[], offset: number, viewHeight: number
   return i;
 }
 
+/** Item shown on `line` (0-based, relative to the top of the window), or null if none. */
+export function itemAt(
+  heights: number[],
+  offset: number,
+  line: number,
+  viewHeight: number,
+): number | null {
+  if (line < 0 || line >= viewHeight) return null;
+  const end = visibleEnd(heights, offset, viewHeight);
+  let bottom = 0;
+  for (let i = offset; i < end; i++) {
+    bottom += heights[i] ?? 1;
+    if (line < bottom) return i;
+  }
+  return null;
+}
+
 /** Menor deslocamento que mantém `selected` visível, partindo de `offset`. */
 export function scrollIntoView(
   heights: number[],

@@ -29,7 +29,9 @@ import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
-import {clamp, scrollIntoView, visibleEnd} from './viewport.js';
+import type {MouseEvent, MouseSource} from './mouse.js';
+import {useDoubleClick} from './useDoubleClick.js';
+import {clamp, itemAt, scrollIntoView, visibleEnd} from './viewport.js';
 
 export interface GraphData {
   rows: GraphRow[];
@@ -51,6 +53,8 @@ interface Props {
   merge: MergeActions;
   /** Files and diffs of a commit, for the full-screen commit view. */
   changes: ChangesActions;
+  /** Clicks and wheel events; without it the list only answers to the keyboard. */
+  mouse?: MouseSource;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -58,12 +62,16 @@ interface Props {
 const CHROME_LINES = 4;
 // Faltando tantos commits para o fim, busca mais histórico.
 const LOAD_AHEAD = 20;
+// The list starts below the header line.
+const LIST_TOP = 1;
+// Commits moved per wheel notch.
+const WHEEL_STEP = 3;
 
 // Git errors span several lines; the footer has one.
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, maxCommits, load, checkout, merge, changes}: Props) {
+export function Browser({initial, initialLimit, maxCommits, load, checkout, merge, changes, mouse}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -82,6 +90,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
   const request = useRef(0);
+  const isDoubleClick = useDoubleClick();
 
   const branches = useMemo(() => branchNames(data.refs), [data.refs]);
   const tips = useMemo(() => localBranchTips(data.refs.byCommit), [data.refs]);
@@ -224,6 +233,23 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   const manageMerge = () => {
     merge.conflicts().then(files => setConflict({files, index: 0})).catch(e => setError(failure(e)));
   };
+
+  // Always the latest closure, so the subscription below is made only once.
+  const onMouse = useRef<(event: MouseEvent) => void>(() => {});
+  onMouse.current = event => {
+    // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
+    if (viewing || prompt || mergePrompt || conflict || picker) return;
+    if (event.type === 'click') {
+      const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
+      if (index === null) return;
+      if (notice) setNotice(null);
+      select(index);
+      if (isDoubleClick(index)) setViewing(true);
+    } else {
+      select(cursor.selected + (event.type === 'wheelUp' ? -WHEEL_STEP : WHEEL_STEP));
+    }
+  };
+  useEffect(() => mouse?.subscribe(event => onMouse.current(event)), [mouse]);
 
   useInput((input, key) => {
     // The commit view has its own keys.
@@ -375,6 +401,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
         refs={refsOf(commit.hash)}
         head={headOf(commit.hash)}
         changes={changes}
+        mouse={mouse}
         onClose={() => setViewing(false)}
       />
     );

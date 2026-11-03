@@ -9,6 +9,7 @@ import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
 import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
 import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
 import {DisplayContext} from '../../src/ui/display.js';
+import type {MouseEvent} from '../../src/ui/mouse.js';
 
 const noCheckout = () => Promise.resolve();
 const noMerge: MergeActions = {
@@ -924,6 +925,207 @@ describe('Browser', () => {
       await press(stdin, 'G');
       expect(lastFrame()).toContain('+line 199');
       expect(lastFrame()).not.toContain('+line 0\n');
+    });
+  });
+
+  describe('mouse', () => {
+    const wheelDown = '\u001B[<65;1;1M';
+    const click = (line: number) => `\u001B[<0;1;${line}M`;
+
+    /** A fake source: tests call `emit` instead of writing to stdin. */
+    function fakeMouse() {
+      const listeners = new Set<(event: MouseEvent) => void>();
+      return {
+        source: {
+          subscribe: (l: (event: MouseEvent) => void) => {
+            listeners.add(l);
+            return () => listeners.delete(l);
+          },
+        },
+        emit: (event: MouseEvent) => listeners.forEach(l => l(event)),
+      };
+    }
+
+    // One line per commit, so screen line n is commit n - 1 (line 0 is the header).
+    const compact = (node: React.ReactNode) => (
+      <DisplayContext.Provider value={{color: false, ascii: false, spaced: false}}>{node}</DisplayContext.Provider>
+    );
+
+    it('selects the commit that was clicked', async () => {
+      const mouse = fakeMouse();
+      const {lastFrame} = render(
+        compact(<Browser initial={data(8)} initialLimit={100} load={vi.fn<LoadGraph>()} mouse={mouse.source} />),
+      );
+      mouse.emit({type: 'click', row: 3, col: 5});
+      await tick();
+      expect(lastFrame()).toContain('3/8');
+      expect(lastFrame()).toContain('h000002');
+    });
+
+    it('opens the commit view on a double click on the same commit', async () => {
+      const mouse = fakeMouse();
+      const files = vi.fn<ChangesActions['files']>().mockResolvedValue([]);
+      const {lastFrame} = render(
+        compact(
+          <Browser
+            initial={data(8)}
+            initialLimit={100}
+            load={vi.fn<LoadGraph>()}
+            mouse={mouse.source}
+            changes={{...noChanges, files}}
+          />,
+        ),
+      );
+      mouse.emit({type: 'click', row: 3, col: 0});
+      await tick();
+      expect(files).not.toHaveBeenCalled();
+      mouse.emit({type: 'click', row: 3, col: 0});
+      await tick();
+      expect(files).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000002'}));
+      expect(lastFrame()).not.toContain('3/8');
+    });
+
+    it('does not open the view for two clicks on different commits or too far apart', async () => {
+      const mouse = fakeMouse();
+      const files = vi.fn<ChangesActions['files']>().mockResolvedValue([]);
+      render(
+        compact(
+          <Browser
+            initial={data(8)}
+            initialLimit={100}
+            load={vi.fn<LoadGraph>()}
+            mouse={mouse.source}
+            changes={{...noChanges, files}}
+          />,
+        ),
+      );
+      mouse.emit({type: 'click', row: 3, col: 0});
+      mouse.emit({type: 'click', row: 4, col: 0});
+      await tick();
+      expect(files).not.toHaveBeenCalled();
+      await new Promise(resolve => setTimeout(resolve, 450));
+      mouse.emit({type: 'click', row: 4, col: 0});
+      await tick();
+      expect(files).not.toHaveBeenCalled();
+    });
+
+    describe('in the commit view', () => {
+      const files: ChangedFile[] = [
+        {path: 'src/a.ts', status: 'M', added: 3, deleted: 1},
+        {path: 'src/b.ts', status: 'M', added: 1, deleted: 0},
+        {path: 'src/c.ts', status: 'A', added: 5, deleted: 0},
+      ];
+
+      const open = async () => {
+        const mouse = fakeMouse();
+        const changes: ChangesActions = {
+          files: vi.fn(() => Promise.resolve(files)),
+          diff: vi.fn(() => Promise.resolve({lines: ['@@ -1 +1 @@', '-a', '+b'], truncated: false})),
+          fullDiff: vi.fn(() => Promise.resolve({lines: ['@@ -1 +1 @@', '-a', '+b'], truncated: false})),
+        };
+        const rendered = render(
+          compact(
+            <Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} changes={changes} mouse={mouse.source} />,
+          ),
+        );
+        await press(rendered.stdin, '\r');
+        await tick();
+        // Header takes lines 0-3, the files heading is line 4 and the first file line 5.
+        return {...rendered, mouse, changes};
+      };
+      const selectedLine = (frame: string | undefined) => (frame ?? '').split('\n').find(l => l.startsWith('>'));
+
+      it('selects the clicked file', async () => {
+        const {mouse, lastFrame} = await open();
+        mouse.emit({type: 'click', row: 6, col: 3});
+        await tick();
+        expect(selectedLine(lastFrame())).toContain('src/b.ts');
+      });
+
+      it('opens the diff of the file on a double click', async () => {
+        const {mouse, lastFrame, changes} = await open();
+        mouse.emit({type: 'click', row: 7, col: 3});
+        mouse.emit({type: 'click', row: 7, col: 3});
+        await tick();
+        expect(changes.fullDiff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), files[2]);
+        expect(lastFrame()).toContain('src/c.ts');
+      });
+
+      it('ignores clicks past the last file and on the header', async () => {
+        const {mouse, lastFrame, changes} = await open();
+        mouse.emit({type: 'click', row: 9, col: 3});
+        mouse.emit({type: 'click', row: 9, col: 3});
+        mouse.emit({type: 'click', row: 0, col: 3});
+        mouse.emit({type: 'click', row: 0, col: 3});
+        await tick();
+        expect(changes.fullDiff).not.toHaveBeenCalled();
+        expect(selectedLine(lastFrame())).toContain('src/a.ts');
+      });
+
+      it('moves the file selection with the wheel', async () => {
+        const {mouse, lastFrame} = await open();
+        mouse.emit({type: 'wheelDown', row: 5, col: 0});
+        await tick();
+        expect(selectedLine(lastFrame())).toContain('src/c.ts');
+        mouse.emit({type: 'wheelUp', row: 5, col: 0});
+        await tick();
+        expect(selectedLine(lastFrame())).toContain('src/a.ts');
+      });
+
+      it('does not change the list behind the view', async () => {
+        const {mouse, stdin, lastFrame} = await open();
+        mouse.emit({type: 'wheelDown', row: 5, col: 0});
+        await tick();
+        await press(stdin, '\u001B');
+        expect(lastFrame()).toContain('1/5');
+      });
+    });
+
+    it('ignores clicks on the header, the details and past the last commit', async () => {
+      const mouse = fakeMouse();
+      const {lastFrame} = render(
+        compact(<Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} mouse={mouse.source} />),
+      );
+      mouse.emit({type: 'click', row: 2, col: 0});
+      await tick();
+      expect(lastFrame()).toContain('2/3');
+      mouse.emit({type: 'click', row: 0, col: 0});
+      mouse.emit({type: 'click', row: 4, col: 0});
+      await tick();
+      expect(lastFrame()).toContain('2/3');
+    });
+
+    it('moves the selection with the wheel and stops at the ends', async () => {
+      const mouse = fakeMouse();
+      const {lastFrame} = render(
+        compact(<Browser initial={data(8)} initialLimit={100} load={vi.fn<LoadGraph>()} mouse={mouse.source} />),
+      );
+      mouse.emit({type: 'wheelDown', row: 2, col: 0});
+      await tick();
+      expect(lastFrame()).toContain('4/8');
+      mouse.emit({type: 'wheelUp', row: 2, col: 0});
+      mouse.emit({type: 'wheelUp', row: 2, col: 0});
+      await tick();
+      expect(lastFrame()).toContain('1/8');
+    });
+
+    it('does nothing while a dialog is open', async () => {
+      const mouse = fakeMouse();
+      const {lastFrame, stdin} = render(
+        compact(<Browser initial={data(8)} initialLimit={100} load={vi.fn<LoadGraph>()} mouse={mouse.source} />),
+      );
+      await press(stdin, '/');
+      mouse.emit({type: 'wheelDown', row: 2, col: 0});
+      mouse.emit({type: 'click', row: 3, col: 0});
+      await tick();
+      expect(lastFrame()).toContain('1/8');
+    });
+
+    it('does not type mouse reports written to stdin as keys', async () => {
+      // Without a source Ink gets the raw report; it must not reach the key handlers.
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, wheelDown, click(2));
+      expect(lastFrame()).toContain('1/5');
     });
   });
 });

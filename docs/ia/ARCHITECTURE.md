@@ -29,6 +29,7 @@ repositório git ──▶ leitura dos dados ──▶ montagem do grafo ──�
 ```
 src/
   cli.tsx          # entrada: argumentos, carga dos dados e escolha entre Browser (TTY) e texto puro (pipe)
+  terminalMouse.ts # liga/desliga o mouse do terminal (modos 1000/1006) e tira os relatórios do stdin antes do Ink
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
@@ -48,6 +49,7 @@ src/
     display.ts     # DisplayContext (cor/ASCII), tint() e separator()
     GraphRowView.tsx # uma linha do grafo em Ink (cores por lane, truncada, destaque)
     CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas; o detalhe completo está em CommitView)
+    useDoubleClick.ts # hook: dois cliques no mesmo alvo em 400 ms
     CommitView.tsx # visão em tela cheia do commit: mensagem, arquivos alterados e diff (Enter/d)
     DiffView.tsx   # diff de um arquivo (lado a lado ou unificado) ou do commit (unificado), com rolagem
     diff.ts        # classifyDiff(): tipo de cada linha de um diff unificado (puro)
@@ -57,7 +59,8 @@ src/
     CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
     MergePrompt.tsx # confirmação do merge (idem)
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
-    viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2 (puro)
+    viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
+    mouse.ts       # parseMouse(): relatórios SGR -> eventos de clique/roda (puro); MouseSource
     picker.ts      # lista e filtro de branches (puro)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
     plain.ts       # formatPlain(): mesma saída em texto puro, para pipes (aceita ascii)
@@ -100,6 +103,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 - **Checkout (`c`):** `checkoutTargets` escolhe o destino do commit selecionado: as branches locais cuja ponta ele é (ordenadas) ou, se não houver, HEAD destacado (`git switch --detach <hash>`); pontas só remotas caem em HEAD destacado. Sempre pede confirmação (`CheckoutPrompt`; com várias branches é uma lista). Se o HEAD já está no destino, só avisa no rodapé. Nunca usa `--force`: o git recusa quando alterações locais seriam sobrescritas, e a mensagem vira o erro de uma linha no rodapé.
 - **Branch local atrás da remota:** se o commit é a ponta de `origin/x` e a branch local `x` (`localBranchTips` em `refs.ts`) está em outro commit, `checkoutTargets` devolve `[pull x, branches realmente no commit, x sem pull, HEAD destacado]` e o prompt é uma lista com a primeira opção selecionada. O nome da branch local é o que sobra depois da remota, tentando cada `/` (aguenta `origin/feature/x`). `checkout` de um alvo `pull` faz `git switch x` e depois `git pull --ff-only <remota> x`. Se o pull falha, lança `PartialCheckoutError` (a troca já aconteceu): o `Browser` recarrega para o HEAD refletir isso e mantém a mensagem, filtrada por `summarizeGitError` (tira o resumo do fetch e as `hint:`). O pull usa `git(..., {network: true})`: `GIT_TERMINAL_PROMPT=0`, processo sem terminal de controle (`detached`, para o ssh não pedir senha na TUI) e limite de 2 minutos.
 - Depois do sucesso do checkout, `Browser` chama `reload` (cursor mantido) para o marcador HEAD acompanhar. `Browser` recebe `checkout(target)` por parâmetro, como `load`.
+
+### Mouse
+
+Clique seleciona o commit da linha, dois cliques no mesmo commit em até 400 ms (`DOUBLE_CLICK_MS` em `useDoubleClick.ts`; o terminal não informa a contagem de cliques, então o hook guarda o último clique numa ref) abrem a visão do commit, e a roda move a seleção em 3 commits. O Ink 8 não tem API de mouse: ele lê o stdin com `readable` + `read()` e descarta os relatórios como sequências desconhecidas, e um segundo listener `data` brigaria com ele pelo stream. Por isso `enableTerminalMouse` (`terminalMouse.ts`) liga os modos 1000 (botões e roda) e 1006 (codificação SGR, sem o limite de 223 colunas) e **embrulha `stdin.read`**: cada chunk passa por `parseMouse`, os relatórios vão para os ouvintes e o resto (teclado) segue para o Ink; um chunk só de relatórios é pulado, para o Ink não receber entrada vazia. `dispose()` restaura o `read` e desliga os modos; a CLI o chama num `finally` e há um handler de `exit` como rede de segurança, já que o modo do terminal sobrevive ao processo.
+
+O `Browser` recebe `mouse?: MouseSource` por parâmetro, como `load`, e assina uma vez (o handler lê o estado mais recente por ref). O clique vira índice com `itemAt(heights, offset, row - LIST_TOP, listHeight)`: a linha de ligação conta como parte do commit de cima, e clicar no cabeçalho, nos detalhes ou depois do último commit não faz nada. Com diálogo aberto (checkout, merge, conflito, seletor) o mouse é ignorado. Com a visão do commit aberta o `Browser` repassa a mesma `MouseSource` ao `CommitView`, que faz o seu próprio mapeamento linha → região (a mensagem começa na linha 5 e a lista de arquivos logo depois dela; `AREA_TOP` e as alturas de `bodyHeight`/`filesHeight` têm de acompanhar o layout da tela): clique foca a mensagem ou seleciona o arquivo, duplo clique abre o diff do arquivo, e a roda rola a região sob o ponteiro. Com o `DiffView` aberto o mouse é ignorado. Só botão esquerdo e roda são tratados; soltar, arrastar e os outros botões são descartados. Com o mouse ligado o terminal não seleciona texto por arraste (use Shift, ou `Option` no macOS, conforme o terminal); `--no-mouse` desliga tudo.
 
 ### Visão do commit (arquivos e diff)
 
