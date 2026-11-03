@@ -3,7 +3,7 @@ import {Box, Text, useInput, useWindowSize} from 'ink';
 import type {ChangedFile, ChangesActions, Diff} from '../git/changes.js';
 import type {Commit} from '../graph/types.js';
 import {classifyDiff, type DiffLineKind} from './diff.js';
-import {separator, tint, useDisplay} from './display.js';
+import {arrow, arrows as arrowKeys, ellipsis as ellipsisOf, rule, separator, tint, useDisplay} from './display.js';
 import {scrollBy} from './scroll.js';
 import {alignDiff, changeStarts, type Side, type SideRow} from './sideBySide.js';
 
@@ -45,7 +45,7 @@ export function DiffView({commit, target, changes, onClose}: Props) {
   const height = Math.max(1, terminalRows - 1 - CHROME_LINES);
 
   const title = target
-    ? `${target.oldPath ? `${target.oldPath} → ` : ''}${target.path}`
+    ? `${target.oldPath ? `${target.oldPath} ${arrow(display)} ` : ''}${target.path}`
     : `commit ${commit.hash.slice(0, 7)}`;
 
   useEffect(() => {
@@ -90,15 +90,15 @@ export function DiffView({commit, target, changes, onClose}: Props) {
     }
   });
 
-  const ellipsis = display.ascii ? '...' : '…';
-  const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const ellipsis = ellipsisOf(display);
+  const arrows = arrowKeys(display);
   const position =
     total > 0 ? `${scroll + 1}-${Math.min(total, scroll + height)}/${total}${diff?.truncated ? '+' : ''}` : '';
   const toggle = splittable ? ` ${dot} u ${mode === 'split' ? 'unificado' : 'lado a lado'}` : '';
   const jump = mode === 'split' && starts.length > 0 ? ` ${dot} n/N muda` : '';
 
   let content: React.ReactNode;
-  let header: React.ReactNode = <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>;
+  let header: React.ReactNode = <Text dimColor>{rule(display, columns)}</Text>;
   if (loaded.status === 'loading') {
     content = <Text dimColor>{`carregando${ellipsis}`}</Text>;
   } else if (loaded.status === 'error') {

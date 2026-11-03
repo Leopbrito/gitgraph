@@ -3,7 +3,7 @@ import {Box, Text, useInput, useWindowSize} from 'ink';
 import type {ChangedFile, ChangesActions} from '../git/changes.js';
 import type {Commit, Ref} from '../graph/types.js';
 import {formatDate} from './date.js';
-import {separator, tint, useDisplay} from './display.js';
+import {arrow as arrowOf, arrows as arrowKeys, ellipsis as ellipsisOf, rule as ruleOf, separator, tint, useDisplay} from './display.js';
 import {DiffView} from './DiffView.js';
 import {formatRefs, type HeadInfo} from './format.js';
 import type {MouseEvent, MouseSource} from './mouse.js';
@@ -132,9 +132,9 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
     // The diff has its own keys while it is open.
   }, {isActive: diff === null});
 
-  const rule = <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>;
-  const ellipsis = display.ascii ? '...' : '…';
-  const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const rule = <Text dimColor>{ruleOf(display, columns)}</Text>;
+  const ellipsis = ellipsisOf(display);
+  const arrows = arrowKeys(display);
 
   if (diff) {
     return <DiffView commit={commit} target={diff.target} changes={changes} onClose={() => setDiff(null)} />;
@@ -228,7 +228,7 @@ const STATUS_COLOR = {A: 'green', M: 'yellow', D: 'red', R: 'cyan', C: 'cyan', T
 
 function FileRow({file, stats, selected}: {file: ChangedFile; stats: Stats; selected: boolean}) {
   const display = useDisplay();
-  const arrow = display.ascii ? '->' : '→';
+  const arrow = arrowOf(display);
   const binary = file.added === null || file.deleted === null;
   const plus = binary ? 'bin'.padStart(stats.addedWidth + 1) : `+${file.added}`.padStart(stats.addedWidth + 1);
   const minus = binary ? ''.padStart(stats.deletedWidth + 1) : `-${file.deleted}`.padStart(stats.deletedWidth + 1);

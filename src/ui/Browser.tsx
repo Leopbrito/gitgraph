@@ -31,7 +31,7 @@ import {ConfirmPrompt} from './ConfirmPrompt.js';
 import {ConflictPrompt} from './ConflictPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {CommitView} from './CommitView.js';
-import {separator, tint, useDisplay} from './display.js';
+import {arrows as arrowKeys, ellipsis, rule, separator, tint, useDisplay} from './display.js';
 import {headLabel} from './format.js';
 import {HelpView} from './HelpView.js';
 import {footerHint as listFooter} from './keymap.js';
@@ -723,7 +723,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     isHead: data.refs.head.hash === hash,
     branch: data.refs.head.branch,
   });
-  const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const arrows = arrowKeys(display);
   const filterLabel =
     revs.length === 0
       ? 'todas as branches'
@@ -752,7 +752,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       : conflict
         ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
         : seeking
-          ? `procurando "${query.trim()}" no histórico${display.ascii ? '...' : '…'} ${dot} Esc cancela`
+          ? `procurando "${query.trim()}" no histórico${ellipsis(display)} ${dot} Esc cancela`
         : typing
           ? `digite para buscar ${dot} Enter confirma ${dot} Esc cancela`
         : picker
@@ -797,7 +797,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           </Text>
         )}
         <Text dimColor>
-          {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}${fetching ? ` ${dot} buscando remotas${display.ascii ? '...' : '…'}` : ''}`}
+          {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${ellipsis(display)}` : ''}${fetching ? ` ${dot} buscando remotas${ellipsis(display)}` : ''}`}
         </Text>
       </Text>
       <Box flexDirection="column" height={listHeight} overflow="hidden">
@@ -814,7 +814,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           />
         ))}
       </Box>
-      <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>
+      <Text dimColor>{rule(display, columns)}</Text>
       {prompt ? (
         <CheckoutPrompt targets={prompt.targets} index={prompt.index} head={data.refs.head} />
       ) : mergePrompt ? (

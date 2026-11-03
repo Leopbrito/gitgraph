@@ -25,3 +25,10 @@ export const tint = <T extends string>(display: Display, color: T | undefined): 
 
 /** Separador de itens nos textos de interface. */
 export const separator = (display: Display): string => (display.ascii ? '|' : '·');
+
+/** The other symbols of the interface texts, with their ASCII forms; every one goes through here so `--ascii` covers it all. */
+export const ellipsis = (display: Display): string => (display.ascii ? '...' : '…');
+export const arrow = (display: Display): string => (display.ascii ? '->' : '→');
+export const arrows = (display: Display): string => (display.ascii ? 'Up/Down' : '↑/↓');
+/** A horizontal rule `width` characters long. */
+export const rule = (display: Display, width: number): string => (display.ascii ? '-' : '─').repeat(width);

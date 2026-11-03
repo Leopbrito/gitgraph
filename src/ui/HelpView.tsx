@@ -1,6 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
-import {separator, useDisplay} from './display.js';
+import {arrows as arrowKeys, rule, separator, useDisplay} from './display.js';
 import {CONTEXT_TITLES, shortcutLines, type ShortcutContext} from './keymap.js';
 import {scrollBy} from './scroll.js';
 
@@ -30,7 +30,7 @@ export function HelpView({onClose}: Props) {
   const height = Math.max(1, terminalRows - 1 - CHROME_LINES + 1);
   const offset = scrollBy(scroll, 0, lines.length, height);
   const go = (delta: number) => setScroll(scrollBy(offset, delta, lines.length, height));
-  const arrows = display.ascii ? 'Up/Down' : '↑/↓';
+  const arrows = arrowKeys(display);
 
   useInput((input, key) => {
     if (key.escape || input === '?' || input === 'q') onClose();
@@ -48,7 +48,7 @@ export function HelpView({onClose}: Props) {
         {`gitgraph ${dot} ajuda`}
         {lines.length > height ? ` ${dot} ${offset + 1}-${Math.min(lines.length, offset + height)}/${lines.length}` : ''}
       </Text>
-      <Text dimColor>{(display.ascii ? '-' : '─').repeat(columns)}</Text>
+      <Text dimColor>{rule(display, columns)}</Text>
       <Box flexDirection="column" height={height} overflow="hidden">
         {lines.slice(offset, offset + height).map((line, i) => (
           <Text key={offset + i} wrap="truncate-end" bold={line.heading}>

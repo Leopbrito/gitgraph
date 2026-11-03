@@ -3,7 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import type {HistoryActions, ResetMode, ResetPreview} from '../git/history.js';
 import type {Commit} from '../graph/types.js';
 import {DETAIL_LINES} from './CommitDetail.js';
-import {tint, useDisplay} from './display.js';
+import {arrows, ellipsis, separator, tint, useDisplay} from './display.js';
 import {clamp} from './viewport.js';
 
 interface Props {
@@ -31,6 +31,7 @@ const oneLine = (error: unknown) =>
 /** Moves the current branch to a commit: soft, mixed or hard. Takes the place of the details panel and handles its own keys. */
 export function ResetPrompt({target, branch, actions, onDone, onCancel}: Props) {
   const display = useDisplay();
+  const dot = separator(display);
   const short = target.hash.slice(0, 7);
   const where = branch ?? 'HEAD';
   // What must be typed for --hard. A detached HEAD has no name to type.
@@ -95,8 +96,8 @@ export function ResetPrompt({target, branch, actions, onDone, onCancel}: Props) 
       ? 'nenhum commit sai da branch'
       : `${plural(preview.ahead, 'commit sai', 'commits saem')} da branch` +
         (preview.orphaned > 0 ? `, ${preview.orphaned} só no reflog` : '')
-    : 'calculando…';
-  const discarded = preview ? plural(preview.changed, 'arquivo modificado', 'arquivos modificados') : '…';
+    : `calculando${ellipsis(display)}`;
+  const discarded = preview ? plural(preview.changed, 'arquivo modificado', 'arquivos modificados') : ellipsis(display);
   const problem = error && (
     <Text wrap="truncate-end" color={tint(display, 'red')}>
       {error}
@@ -117,7 +118,7 @@ export function ResetPrompt({target, branch, actions, onDone, onCancel}: Props) 
               {`${i === step.index ? '>' : ' '} --${mode?.padEnd(5)} ${text}`}
             </Text>
           ))}
-          {problem || <Text dimColor>↑/↓ escolhe · Enter segue · Esc cancela</Text>}
+          {problem || <Text dimColor>{`${arrows(display)} escolhe ${dot} Enter segue ${dot} Esc cancela`}</Text>}
         </>
       )}
       {step.type === 'confirm' && (
@@ -128,7 +129,7 @@ export function ResetPrompt({target, branch, actions, onDone, onCancel}: Props) 
             {step.mode === 'soft' ? 'O que estava nesses commits vira alterações em stage.' : 'O que estava nesses commits vira alterações fora do stage.'}
           </Text>
           {problem || <Text> </Text>}
-          <Text dimColor>Enter/y confirma · Esc/n cancela</Text>
+          <Text dimColor>{`Enter/y confirma ${dot} Esc/n cancela`}</Text>
         </>
       )}
       {step.type === 'force' && (
@@ -143,10 +144,10 @@ export function ResetPrompt({target, branch, actions, onDone, onCancel}: Props) 
             <Text bold>{'> '}</Text>
             {step.value}
             <Text inverse> </Text>
-            {busy && <Text dimColor>{'  aguarde…'}</Text>}
+            {busy && <Text dimColor>{`  aguarde${ellipsis(display)}`}</Text>}
           </Text>
           {problem || <Text> </Text>}
-          <Text dimColor>Enter confirma · Esc cancela</Text>
+          <Text dimColor>{`Enter confirma ${dot} Esc cancela`}</Text>
         </>
       )}
     </Box>

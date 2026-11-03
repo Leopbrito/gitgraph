@@ -3,7 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import type {Commit, Ref} from '../graph/types.js';
 import {UnmergedBranchError, type RefActions} from '../git/refsEdit.js';
 import {DETAIL_LINES} from './CommitDetail.js';
-import {tint, useDisplay} from './display.js';
+import {ellipsis, separator, tint, useDisplay} from './display.js';
 import {describeTarget, refTargets, type RefMode, type RefTarget} from './refTargets.js';
 import {centerWindow, clamp} from './viewport.js';
 
@@ -37,6 +37,7 @@ const oneLine = (error: unknown) =>
  */
 export function RefManager({mode, commit, refs, currentBranch, actions, onDone, onCancel}: Props) {
   const display = useDisplay();
+  const dot = separator(display);
   const short = commit.hash.slice(0, 7);
   const [step, setStep] = useState<Step>(() => {
     if (mode === 'rename' || mode === 'delete') {
@@ -167,7 +168,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
       <Text bold>{label}</Text>
       {value}
       <Text inverse> </Text>
-      {busy && <Text dimColor>{'  aguarde…'}</Text>}
+      {busy && <Text dimColor>{`  aguarde${ellipsis(display)}`}</Text>}
     </Text>
   );
   const problem = error && (
@@ -200,7 +201,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
         <>
           <Text bold wrap="truncate-end">{step.target ? `${title} ${describeTarget(step.target)}` : title}</Text>
           {field(step.target ? 'Novo nome: ' : 'Nome: ', step.value)}
-          {problem || <Text dimColor>Enter confirma · Esc cancela</Text>}
+          {problem || <Text dimColor>{`Enter confirma ${dot} Esc cancela`}</Text>}
           {mode === 'annotated' ? <Text dimColor>Em seguida, a mensagem da tag.</Text> : blank}
           {blank}
         </>
@@ -209,7 +210,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
         <>
           <Text bold wrap="truncate-end">{`Tag anotada ${step.name}`}</Text>
           {field('Mensagem: ', step.value)}
-          {problem || <Text dimColor>Enter cria · Esc cancela</Text>}
+          {problem || <Text dimColor>{`Enter cria ${dot} Esc cancela`}</Text>}
           {blank}
           {blank}
         </>
@@ -223,7 +224,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
               : 'Só a branch some; se ela tiver commits que nenhuma outra ref tem, o git recusa e pede outra confirmação.'}
           </Text>
           {problem || blank}
-          <Text dimColor>Enter/y confirma · Esc/n cancela</Text>
+          <Text dimColor>{`Enter/y confirma ${dot} Esc/n cancela`}</Text>
           {blank}
         </>
       )}
