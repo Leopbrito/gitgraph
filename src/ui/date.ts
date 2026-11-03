@@ -3,12 +3,12 @@
 /**
  * - `short`: `2026-03-04` in lists and `2026-03-04 10:00` in the details (the default).
  * - `iso`: `2026-03-04 10:00` everywhere.
- * - `relative`: `há 3 dias`; the details add the exact time.
+ * - `relative`: `3 days ago`; the details add the exact time.
  */
 export const DATE_STYLES = ['short', 'iso', 'relative'] as const;
 export type DateStyle = (typeof DATE_STYLES)[number];
 
-const relativeFormat = new Intl.RelativeTimeFormat('pt-BR', {numeric: 'auto'});
+const relativeFormat = new Intl.RelativeTimeFormat('en', {numeric: 'auto'});
 
 // Seconds in each unit, largest first; a month is the average one (30.44 days).
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -20,7 +20,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ];
 
-/** "há 3 dias", "ontem", "agora" ... relative to `now`. */
+/** "3 days ago", "yesterday", "now" ... relative to `now`. */
 export function relativeDate(iso: string, now: Date): string {
   const time = Date.parse(iso);
   if (Number.isNaN(time)) return iso;

@@ -35,18 +35,18 @@ describe('parseConfig', () => {
   });
 
   it.each([
-    ['{"order": "newest"}', '"order" deve ser date, author-date, topo (recebido: "newest")'],
-    ['{"date": 3}', '"date" deve ser short, iso, relative'],
-    ['{"compact": "yes"}', '"compact" deve ser true ou false (recebido: "yes")'],
-    ['{"maxCount": 0}', '"maxCount" deve ser um inteiro positivo'],
-    ['{"maxCount": 1.5}', '"maxCount" deve ser um inteiro positivo'],
-    ['{"compat": true}', 'chave desconhecida "compat"'],
-    ['{"colors": []}', '"colors" deve ser um objeto'],
-    ['{"colors": {"lane": []}}', 'chave desconhecida "colors.lane"'],
-    ['{"colors": {"lanes": []}}', '"colors.lanes" deve ser uma lista não vazia'],
-    ['{"colors": {"lanes": ["cyan", "pink"]}}', '"colors.lanes" deve ser uma lista não vazia de cores'],
-    ['[]', 'deve conter um objeto JSON'],
-    ['not json', 'JSON inválido'],
+    ['{"order": "newest"}', '"order" must be date, author-date, topo (got: "newest")'],
+    ['{"date": 3}', '"date" must be short, iso, relative'],
+    ['{"compact": "yes"}', '"compact" must be true or false (got: "yes")'],
+    ['{"maxCount": 0}', '"maxCount" must be a positive integer'],
+    ['{"maxCount": 1.5}', '"maxCount" must be a positive integer'],
+    ['{"compat": true}', 'unknown key "compat"'],
+    ['{"colors": []}', '"colors" must be an object'],
+    ['{"colors": {"lane": []}}', 'unknown key "colors.lane"'],
+    ['{"colors": {"lanes": []}}', '"colors.lanes" must be a non-empty list'],
+    ['{"colors": {"lanes": ["cyan", "pink"]}}', '"colors.lanes" must be a non-empty list of colors'],
+    ['[]', 'must contain a JSON object'],
+    ['not json', 'invalid JSON'],
   ])('rejects %s', (text, message) => {
     const attempt = () => parseConfig(text, src);
     expect(attempt).toThrow(ConfigError);
@@ -83,6 +83,6 @@ describe('loadConfig', () => {
     const read = () => {
       throw Object.assign(new Error('permission denied'), {code: 'EACCES'});
     };
-    expect(() => loadConfig({XDG_CONFIG_HOME: '/cfg'}, read)).toThrow(/config\.json: não foi possível ler/);
+    expect(() => loadConfig({XDG_CONFIG_HOME: '/cfg'}, read)).toThrow(/config\.json: could not read/);
   });
 });

@@ -44,11 +44,11 @@ const oneOf = <T extends string>(values: readonly T[]) => ({
   check: (v: unknown): v is T => typeof v === 'string' && (values as readonly string[]).includes(v),
   expected: values.join(', '),
 });
-const BOOLEAN = {check: (v: unknown): v is boolean => typeof v === 'boolean', expected: 'true ou false'};
+const BOOLEAN = {check: (v: unknown): v is boolean => typeof v === 'boolean', expected: 'true or false'};
 
 // Key -> how to validate it. Anything else in the file is an error: a typo would otherwise be ignored silently.
 const SCHEMA = {
-  maxCount: {check: (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0, expected: 'um inteiro positivo'},
+  maxCount: {check: (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0, expected: 'a positive integer'},
   order: oneOf(COMMIT_ORDERS),
   date: oneOf(DATE_STYLES),
   compact: BOOLEAN,
@@ -66,10 +66,10 @@ export function parseConfig(text: string, source: string): FileConfig {
   try {
     raw = JSON.parse(text);
   } catch (error) {
-    throw new ConfigError(`${source}: JSON inválido (${error instanceof Error ? error.message : String(error)})`);
+    throw new ConfigError(`${source}: invalid JSON (${error instanceof Error ? error.message : String(error)})`);
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new ConfigError(`${source}: o arquivo deve conter um objeto JSON`);
+    throw new ConfigError(`${source}: the file must contain a JSON object`);
   }
   const config: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
@@ -78,11 +78,11 @@ export function parseConfig(text: string, source: string): FileConfig {
     } else if (key in SCHEMA) {
       const rule = SCHEMA[key as keyof typeof SCHEMA];
       if (!rule.check(value)) {
-        throw new ConfigError(`${source}: "${key}" deve ser ${rule.expected} (recebido: ${JSON.stringify(value)})`);
+        throw new ConfigError(`${source}: "${key}" must be ${rule.expected} (got: ${JSON.stringify(value)})`);
       }
       config[key] = value;
     } else {
-      throw new ConfigError(`${source}: chave desconhecida "${key}" (válidas: ${[...Object.keys(SCHEMA), 'colors'].join(', ')})`);
+      throw new ConfigError(`${source}: unknown key "${key}" (valid: ${[...Object.keys(SCHEMA), 'colors'].join(', ')})`);
     }
   }
   return config as FileConfig;
@@ -90,14 +90,14 @@ export function parseConfig(text: string, source: string): FileConfig {
 
 function parseColors(value: unknown, source: string): NonNullable<FileConfig['colors']> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ConfigError(`${source}: "colors" deve ser um objeto (por exemplo {"lanes": ["cyan", "#ff8800"]})`);
+    throw new ConfigError(`${source}: "colors" must be an object (for example {"lanes": ["cyan", "#ff8800"]})`);
   }
   const colors: NonNullable<FileConfig['colors']> = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (key !== 'lanes') throw new ConfigError(`${source}: chave desconhecida "colors.${key}" (válida: lanes)`);
+    if (key !== 'lanes') throw new ConfigError(`${source}: unknown key "colors.${key}" (valid: lanes)`);
     if (!Array.isArray(entry) || entry.length === 0 || !entry.every(isColor)) {
       throw new ConfigError(
-        `${source}: "colors.lanes" deve ser uma lista não vazia de cores (nomes como red e cyanBright, ou #rrggbb); recebido: ${JSON.stringify(entry)}`,
+        `${source}: "colors.lanes" must be a non-empty list of colors (names like red and cyanBright, or #rrggbb); got: ${JSON.stringify(entry)}`,
       );
     }
     colors.lanes = entry;
@@ -116,7 +116,7 @@ export function loadConfig(
     text = read(path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
-    throw new ConfigError(`${path}: não foi possível ler (${error instanceof Error ? error.message : String(error)})`);
+    throw new ConfigError(`${path}: could not read (${error instanceof Error ? error.message : String(error)})`);
   }
   return parseConfig(text, path);
 }

@@ -67,11 +67,11 @@ describe('footerHint and asciiKeys', () => {
         .map(s => s.footer)
         .join(' · '),
     );
-    for (const text of ['j/k ↑/↓ mover', 'c checkout', 'm merge', '? ajuda', 'q sair']) expect(hint).toContain(text);
+    for (const text of ['j/k ↑/↓ move', 'c checkout', 'm merge', '? help', 'q quit']) expect(hint).toContain(text);
   });
 
   it('turns arrows into words for --ascii', () => {
-    expect(asciiKeys('j/k ↑/↓ mover')).toBe('j/k Up/Down mover');
+    expect(asciiKeys('j/k ↑/↓ move')).toBe('j/k Up/Down move');
     expect(asciiKeys('h / ←,  l / →')).toBe('h / Left,  l / Right');
     expect(footerHint('|', true)).not.toMatch(/[↑↓←→]/);
   });

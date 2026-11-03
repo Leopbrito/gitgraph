@@ -25,7 +25,7 @@ import {Browser, type LoadGraph} from './ui/Browser.js';
 import {DisplayContext} from './ui/display.js';
 import {plainLines} from './ui/plain.js';
 
-/** Commits carregados de início na TUI; o resto vem sob demanda. */
+/** Commits loaded at the start of the TUI; the rest comes on demand. */
 const DEFAULT_LIMIT = 500;
 
 async function main() {
@@ -42,7 +42,7 @@ async function main() {
 
   const cwd = resolve(options.directory ?? process.cwd());
   if (options.directory !== undefined && !statSync(cwd, {throwIfNoEntry: false})?.isDirectory()) {
-    throw new UsageError(`-C: ${options.directory} não é um diretório`);
+    throw new UsageError(`-C: ${options.directory} is not a directory`);
   }
   await verifyRevisions(cwd, options.revs);
   const logOptions = (revs: string[], maxCount: number | undefined): LogOptions => ({
@@ -65,9 +65,9 @@ async function main() {
     return {rows: layoutGraph(commits), refs};
   };
 
-  // Sem TTY (pipe/redirecionamento) a saída é texto puro e completa, como o `git log`.
+  // Without a TTY (pipe/redirect) the output is plain text and complete, like `git log`.
   if (!process.stdout.isTTY) {
-    // O leitor pode fechar o pipe antes do fim (`| head`, `| less` + q): sai sem erro.
+    // The reader may close the pipe before the end (`| head`, `| less` + q): exit without an error.
     process.stdout.on('error', error => {
       if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0);
       throw error;
@@ -85,7 +85,7 @@ async function main() {
       count++;
     }
     if (count === 0) {
-      console.error('gitgraph: o repositório não tem commits');
+      console.error('gitgraph: the repository has no commits');
       return;
     }
     const refs = await loadRefs(cwd);
@@ -111,7 +111,7 @@ async function main() {
           initial={initial}
           initialLimit={initialLimit}
           initialRevs={options.revs}
-          filters={[...describeFilters(options.filters), ...(options.paths.length > 0 ? [`caminhos ${options.paths.join(' ')}`] : [])]}
+          filters={[...describeFilters(options.filters), ...(options.paths.length > 0 ? [`paths ${options.paths.join(' ')}`] : [])]}
           maxCommits={options.maxCount}
           load={load}
           checkout={target => checkout(cwd, target)}
@@ -144,7 +144,7 @@ main().catch(error => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`gitgraph: ${message}`);
   if (error instanceof UsageError) {
-    console.error('Use --help para ver as opções.');
+    console.error('Use --help to see the options.');
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

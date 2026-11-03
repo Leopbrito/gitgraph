@@ -26,7 +26,7 @@ export async function verifyRevisions(cwd: string, revs: string[]): Promise<void
       // `--quiet` makes an unknown revision exit 1 with no stderr, so exec.ts falls back to the
       // generic "Command failed"; other failures (not a repository, no git) keep their message.
       if (error instanceof Error && error.message.startsWith('Command failed:')) {
-        throw new Error(`revisão desconhecida: ${name} (para filtrar por caminho, use -- <caminho>)`);
+        throw new Error(`unknown revision: ${name} (to filter by path, use -- <path>)`);
       }
       throw error;
     }

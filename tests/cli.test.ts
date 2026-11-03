@@ -61,11 +61,11 @@ describe('cli (pipe mode)', () => {
     const {dir} = repo();
     const unknown = await gitgraph(dir, 'nope');
     expect(unknown.code).toBe(1);
-    expect(unknown.stderr).toContain('revisão desconhecida: nope');
+    expect(unknown.stderr).toContain('unknown revision: nope');
 
     const missing = await gitgraph(dir, '-C', join(dir, 'missing'));
     expect(missing.code).toBe(2);
-    expect(missing.stderr).toContain('não é um diretório');
+    expect(missing.stderr).toContain('is not a directory');
   });
 });
 
@@ -118,10 +118,10 @@ describe('cli (config file)', () => {
     const bad = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg});
     expect(bad.code).toBe(1);
     expect(bad.stderr).toContain('config.json');
-    expect(bad.stderr).toContain('"order" deve ser date, author-date, topo');
+    expect(bad.stderr).toContain('"order" must be date, author-date, topo');
 
     const help = await gitgraphEnv(dir, {XDG_CONFIG_HOME: xdg}, '--help');
     expect(help.code).toBe(0);
-    expect(help.stdout).toContain('Uso: gitgraph');
+    expect(help.stdout).toContain('Usage: gitgraph');
   });
 });

@@ -46,8 +46,8 @@ describe('verifyRevisions', () => {
   it('names the unknown revision', async () => {
     const {dir, run} = repo();
     run('commit', '--allow-empty', '-q', '-m', 'one');
-    await expect(verifyRevisions(dir, ['main', 'nope'])).rejects.toThrow('revisão desconhecida: nope');
-    await expect(verifyRevisions(dir, ['main..ghost'])).rejects.toThrow('revisão desconhecida: ghost');
+    await expect(verifyRevisions(dir, ['main', 'nope'])).rejects.toThrow('unknown revision: nope');
+    await expect(verifyRevisions(dir, ['main..ghost'])).rejects.toThrow('unknown revision: ghost');
   });
 
   it('keeps the message when it is not a repository', async () => {

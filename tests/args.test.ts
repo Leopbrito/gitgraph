@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {parseCliArgs, UsageError} from '../src/args.js';
 
 describe('parseCliArgs', () => {
-  it('usa os padrões sem argumentos', () => {
+  it('uses the defaults without arguments', () => {
     expect(parseCliArgs([])).toEqual({
       maxCount: undefined,
       color: true,
@@ -24,37 +24,37 @@ describe('parseCliArgs', () => {
     });
   });
 
-  it('lê -n e --max-count', () => {
+  it('reads -n and --max-count', () => {
     expect(parseCliArgs(['-n', '50']).maxCount).toBe(50);
     expect(parseCliArgs(['--max-count', '7']).maxCount).toBe(7);
     expect(parseCliArgs(['--max-count=12']).maxCount).toBe(12);
   });
 
-  it.each(['0', '-3', 'abc', '1.5', '', '10x'])('rejeita --max-count %j', value => {
+  it.each(['0', '-3', 'abc', '1.5', '', '10x'])('rejects --max-count %j', value => {
     expect(() => parseCliArgs([`--max-count=${value}`])).toThrow(UsageError);
   });
 
-  it('desliga a cor com --no-color ou NO_COLOR', () => {
+  it('turns the color off with --no-color or NO_COLOR', () => {
     expect(parseCliArgs(['--no-color']).color).toBe(false);
     expect(parseCliArgs([], {NO_COLOR: '1'}).color).toBe(false);
-    // NO_COLOR vazio não conta, conforme no-color.org.
+    // An empty NO_COLOR does not count, per no-color.org.
     expect(parseCliArgs([], {NO_COLOR: ''}).color).toBe(true);
   });
 
-  it('lê --compact', () => {
+  it('reads --compact', () => {
     expect(parseCliArgs(['--compact']).compact).toBe(true);
   });
 
-  it('lê --ascii, --help e --version (inclusive as formas curtas)', () => {
+  it('reads --ascii, --help and --version (short forms included)', () => {
     expect(parseCliArgs(['--ascii']).ascii).toBe(true);
     expect(parseCliArgs(['-h']).help).toBe(true);
     expect(parseCliArgs(['--version']).version).toBe(true);
     expect(parseCliArgs(['-v']).version).toBe(true);
   });
 
-  it('explica os erros de uso em português', () => {
-    expect(() => parseCliArgs(['--foo'])).toThrow('opção desconhecida: --foo');
-    expect(() => parseCliArgs(['-n'])).toThrow(/exige um valor/);
+  it('explains the usage errors', () => {
+    expect(() => parseCliArgs(['--foo'])).toThrow('unknown option: --foo');
+    expect(() => parseCliArgs(['-n'])).toThrow(/needs a value/);
   });
 
   it('reads --order and defaults to date', () => {
@@ -65,7 +65,7 @@ describe('parseCliArgs', () => {
   });
 
   it.each(['topological', '', 'DATE'])('rejects --order %j', value => {
-    expect(() => parseCliArgs([`--order=${value}`])).toThrow(/--order deve ser date, author-date, topo/);
+    expect(() => parseCliArgs([`--order=${value}`])).toThrow(/--order must be date, author-date, topo/);
   });
 
   it('enables the mouse by default and turns it off with --no-mouse', () => {
@@ -79,15 +79,15 @@ describe('parseCliArgs', () => {
   });
 });
 
-describe('revisões, caminhos e -C', () => {
-  it('usa os padrões sem posicionais', () => {
+describe('revisions, paths and -C', () => {
+  it('uses the defaults without positionals', () => {
     const options = parseCliArgs([]);
     expect(options.revs).toEqual([]);
     expect(options.paths).toEqual([]);
     expect(options.directory).toBeUndefined();
   });
 
-  it('lê revisões posicionais, em qualquer posição entre as opções', () => {
+  it('reads positional revisions, anywhere among the options', () => {
     expect(parseCliArgs(['main', 'feature-x']).revs).toEqual(['main', 'feature-x']);
     const options = parseCliArgs(['main', '--ascii', 'v1.0..main', '-n', '5']);
     expect(options.revs).toEqual(['main', 'v1.0..main']);
@@ -95,31 +95,31 @@ describe('revisões, caminhos e -C', () => {
     expect(options.maxCount).toBe(5);
   });
 
-  it('separa os caminhos após --', () => {
+  it('splits the paths after --', () => {
     const options = parseCliArgs(['main', '--', 'src/', 'README.md']);
     expect(options.revs).toEqual(['main']);
     expect(options.paths).toEqual(['src/', 'README.md']);
   });
 
-  it('aceita só caminhos, e opções parecidas após -- viram caminhos', () => {
+  it('accepts only paths, and option-like words after -- become paths', () => {
     const options = parseCliArgs(['--', 'src/', '--ascii']);
     expect(options.revs).toEqual([]);
     expect(options.paths).toEqual(['src/', '--ascii']);
     expect(options.ascii).toBe(false);
   });
 
-  it('lê -C e --directory', () => {
+  it('reads -C and --directory', () => {
     expect(parseCliArgs(['-C', '/tmp/repo']).directory).toBe('/tmp/repo');
-    expect(parseCliArgs(['--directory=../outro']).directory).toBe('../outro');
+    expect(parseCliArgs(['--directory=../other']).directory).toBe('../other');
   });
 
-  it('rejeita -C sem valor', () => {
+  it('rejects -C without a value', () => {
     expect(() => parseCliArgs(['-C'])).toThrow(UsageError);
   });
 });
 
-describe('filtros do log', () => {
-  it('lê cada filtro', () => {
+describe('log filters', () => {
+  it('reads each filter', () => {
     expect(
       parseCliArgs(['--author', 'Ana', '--since=2 weeks ago', '--until', '2026-02-01', '--first-parent', '--no-remotes', '--no-tags']).filters,
     ).toEqual({
@@ -132,11 +132,11 @@ describe('filtros do log', () => {
     });
   });
 
-  it('não define o que não foi pedido', () => {
+  it('does not set what was not asked for', () => {
     expect(parseCliArgs(['--no-tags']).filters).toEqual({hideTags: true});
   });
 
-  it('rejeita --author sem valor', () => {
+  it('rejects --author without a value', () => {
     expect(() => parseCliArgs(['--author'])).toThrow(UsageError);
   });
 });
@@ -156,14 +156,14 @@ describe('--date', () => {
   });
 
   it('rejects an unknown style', () => {
-    expect(() => parseCliArgs(['--date=full'])).toThrow('--date deve ser short, iso, relative');
+    expect(() => parseCliArgs(['--date=full'])).toThrow('--date must be short, iso, relative');
   });
 });
 
-describe('arquivo de configuração', () => {
+describe('config file', () => {
   const file = {order: 'topo', date: 'iso', compact: true, ascii: true, color: false, stash: false, mouse: false, watch: true, maxCount: 40} as const;
 
-  it('o arquivo vale no lugar dos padrões', () => {
+  it('the file replaces the defaults', () => {
     const options = parseCliArgs([], {}, () => file);
     expect(options).toMatchObject({
       order: 'topo',
@@ -178,7 +178,7 @@ describe('arquivo de configuração', () => {
     });
   });
 
-  it('as flags vencem o arquivo, inclusive as que desligam', () => {
+  it('the flags beat the file, the ones that turn things off included', () => {
     const options = parseCliArgs(
       ['--order=date', '--date=short', '--no-compact', '--no-ascii', '--color', '--stash', '--mouse', '--no-watch', '-n', '7'],
       {},
@@ -197,32 +197,32 @@ describe('arquivo de configuração', () => {
     });
   });
 
-  it('as flags que ligam também vencem o arquivo, e a negativa ganha se vierem as duas', () => {
+  it('the enabling flags also beat the file, and the negative wins if both come', () => {
     expect(parseCliArgs(['--compact'], {}, () => ({compact: false})).compact).toBe(true);
     expect(parseCliArgs(['--compact', '--no-compact']).compact).toBe(false);
   });
 
-  it('NO_COLOR vale sobre o padrão, mas o arquivo e as flags o sobrepõem', () => {
+  it('NO_COLOR beats the default, but the file and the flags override it', () => {
     expect(parseCliArgs([], {NO_COLOR: '1'}).color).toBe(false);
     expect(parseCliArgs([], {NO_COLOR: '1'}, () => ({color: true})).color).toBe(true);
     expect(parseCliArgs(['--color'], {NO_COLOR: '1'}).color).toBe(true);
   });
 
-  it('entrega as cores das lanes', () => {
+  it('passes on the lane colors', () => {
     expect(parseCliArgs([], {}, () => ({colors: {lanes: ['red', '#00ff00']}})).laneColors).toEqual(['red', '#00ff00']);
   });
 
-  it('não lê o arquivo para --help nem --version, então um arquivo quebrado não os impede', () => {
+  it('does not read the file for --help or --version, so a broken file does not stop them', () => {
     const broken = () => {
-      throw new Error('arquivo quebrado');
+      throw new Error('broken file');
     };
     expect(parseCliArgs(['--help'], {}, broken).help).toBe(true);
     expect(parseCliArgs(['-v'], {}, broken).version).toBe(true);
-    expect(() => parseCliArgs([], {}, broken)).toThrow('arquivo quebrado');
+    expect(() => parseCliArgs([], {}, broken)).toThrow('broken file');
   });
 
-  it('valida a ordem e a data que vêm do arquivo com a mesma mensagem', () => {
-    expect(() => parseCliArgs([], {}, () => ({order: 'x' as 'topo'}))).toThrow('--order deve ser');
+  it('validates the order and the date from the file with the same message', () => {
+    expect(() => parseCliArgs([], {}, () => ({order: 'x' as 'topo'}))).toThrow('--order must be');
   });
 });
 

@@ -5,7 +5,7 @@ import {DATE_STYLES, type DateStyle} from './ui/date.js';
 import {COMMIT_ORDERS, type CommitOrder, type LogFilters} from './git/log.js';
 
 export interface CliOptions {
-  /** Limite de commits; sem ele a TUI carrega sob demanda e o pipe imprime tudo. */
+  /** Commit limit; without it the TUI loads on demand and the pipe prints everything. */
   maxCount: number | undefined;
   color: boolean;
   ascii: boolean;
@@ -37,7 +37,7 @@ export interface CliOptions {
   version: boolean;
 }
 
-/** Erro de uso da linha de comando (a CLI sai com código 2). */
+/** A command line usage error (the CLI exits with status 2). */
 export class UsageError extends Error {}
 
 export const OPTIONS = {
@@ -71,25 +71,25 @@ export const OPTIONS = {
 
 /** Every option with the text for `--help`, in the order shown. A test checks that each key of OPTIONS is mentioned. */
 const OPTION_DOCS: [flags: string, text: string][] = [
-  ['-C, --directory <caminho>', 'abre o repositório de outro diretório, sem precisar de cd'],
-  ['-n, --max-count <n>', 'mostra no máximo n commits (padrão: sem limite)'],
-  ['--author <padrão>', 'só commits cujo autor casa com o padrão (regex, como no git log)'],
-  ['--since <data>', 'só commits depois da data ("2 weeks ago", 2026-01-31)'],
-  ['--until <data>', 'só commits até a data'],
-  ['--first-parent', 'segue só o primeiro pai de cada merge'],
-  ['--no-remotes', 'esconde as branches remotas'],
-  ['--no-tags', 'esconde as tags'],
-  ['--order <ordem>', 'ordem dos commits: date (padrão), author-date ou topo'],
-  ['--date <formato>', 'formato das datas: short (padrão), iso ou relative (há 3 dias)'],
-  ['--color, --no-color', 'liga / desliga as cores (NO_COLOR também desliga)'],
-  ['--ascii, --no-ascii', 'usa só caracteres ASCII no grafo e na interface'],
-  ['--compact, --no-compact', 'uma linha por commit, sem a linha de ligação entre eles'],
-  ['--stash, --no-stash', 'mostra / esconde os stashes no grafo'],
-  ['--uncommitted, --no-uncommitted', 'mostra / esconde o nó das alterações não commitadas'],
-  ['--watch, --no-watch', 'recarrega o grafo sozinho quando commits, refs ou o índice mudam (editar arquivos só aparece com r)'],
-  ['--mouse, --no-mouse', 'liga / desliga o mouse (sem ele o terminal volta a selecionar texto)'],
-  ['-h, --help', 'mostra esta ajuda'],
-  ['-v, --version', 'mostra a versão'],
+  ['-C, --directory <path>', 'open the repository in another directory, without a cd'],
+  ['-n, --max-count <n>', 'show at most n commits (default: no limit)'],
+  ['--author <pattern>', 'only commits whose author matches the pattern (regex, as in git log)'],
+  ['--since <date>', 'only commits after the date ("2 weeks ago", 2026-01-31)'],
+  ['--until <date>', 'only commits up to the date'],
+  ['--first-parent', 'follow only the first parent of each merge'],
+  ['--no-remotes', 'hide the remote branches'],
+  ['--no-tags', 'hide the tags'],
+  ['--order <order>', 'commit order: date (default), author-date or topo'],
+  ['--date <format>', 'date format: short (default), iso or relative (3 days ago)'],
+  ['--color, --no-color', 'turn the colors on / off (NO_COLOR also turns them off)'],
+  ['--ascii, --no-ascii', 'use only ASCII characters in the graph and the interface'],
+  ['--compact, --no-compact', 'one line per commit, without the connector line between them'],
+  ['--stash, --no-stash', 'show / hide the stashes in the graph'],
+  ['--uncommitted, --no-uncommitted', 'show / hide the uncommitted changes node'],
+  ['--watch, --no-watch', 'reload the graph by itself when commits, refs or the index change (file edits only show with r)'],
+  ['--mouse, --no-mouse', 'turn the mouse on / off (without it the terminal selects text again)'],
+  ['-h, --help', 'show this help'],
+  ['-v, --version', 'show the version'],
 ];
 
 function optionLines(): string[] {
@@ -107,23 +107,23 @@ function shortcutSections(): string[] {
 }
 
 export const HELP = [
-  'gitgraph: mostra o grafo de branches do repositório git atual no terminal.',
+  'gitgraph: shows the branch graph of the current git repository in the terminal.',
   '',
-  'Uso: gitgraph [opções] [<revisão>...] [-- <caminho>...]',
+  'Usage: gitgraph [options] [<revision>...] [-- <path>...]',
   '',
-  'Sem revisões mostra todas as branches, remotas e tags. Com revisões (main, feature-x,',
-  'v1.0..main, um hash) mostra só o que é alcançável delas; após -- limita o histórico',
-  'a commits que mexeram nos caminhos.',
+  'Without revisions it shows every branch, remote and tag. With revisions (main, feature-x,',
+  'v1.0..main, a hash) it shows only what they reach; after -- it limits the history',
+  'to commits that touched the paths.',
   '',
-  'Opções:',
+  'Options:',
   ...optionLines(),
   '',
-  'Padrões podem ficar em $XDG_CONFIG_HOME/gitgraph/config.json (ou ~/.config/gitgraph/config.json);',
-  'as opções da linha de comando têm precedência sobre o arquivo.',
+  'Defaults can go in $XDG_CONFIG_HOME/gitgraph/config.json (or ~/.config/gitgraph/config.json);',
+  'command line options take precedence over the file.',
   '',
-  'No terminal a interface é interativa; com a saída redirecionada (pipe), imprime texto puro.',
+  'In a terminal the interface is interactive; with the output redirected (pipe) it prints plain text.',
   '',
-  'Teclas (a tecla ? mostra esta lista dentro da interface):',
+  'Keys (the ? key shows this list inside the interface):',
   ...shortcutSections(),
   '',
 ].join('\n');
@@ -158,17 +158,17 @@ export function parseCliArgs(
 
   const raw = values['max-count'];
   if (raw !== undefined && !/^[1-9]\d*$/.test(raw)) {
-    throw new UsageError(`--max-count deve ser um inteiro positivo (recebido: "${raw}")`);
+    throw new UsageError(`--max-count must be a positive integer (got: "${raw}")`);
   }
   const order = values.order ?? file.order ?? 'date';
   if (!isCommitOrder(order)) {
     throw new UsageError(
-      `--order deve ser ${COMMIT_ORDERS.join(', ')} (recebido: "${order}")`,
+      `--order must be ${COMMIT_ORDERS.join(', ')} (got: "${order}")`,
     );
   }
   const date = values.date ?? file.date ?? 'short';
   if (!isDateStyle(date)) {
-    throw new UsageError(`--date deve ser ${DATE_STYLES.join(', ')} (recebido: "${date}")`);
+    throw new UsageError(`--date must be ${DATE_STYLES.join(', ')} (got: "${date}")`);
   }
   // `--x` / `--no-x` pair: the one given wins; if both are, the negative does.
   const toggle = (name: 'color' | 'ascii' | 'compact' | 'stash' | 'uncommitted' | 'mouse' | 'watch'): boolean | undefined =>
@@ -213,11 +213,11 @@ function translate(error: unknown): string {
   const quoted = /'([^']+)'/.exec(message)?.[1] ?? '';
   switch (code) {
     case 'ERR_PARSE_ARGS_UNKNOWN_OPTION':
-      return `opção desconhecida: ${quoted}`;
+      return `unknown option: ${quoted}`;
     case 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE':
-      return `a opção ${quoted || 'informada'} exige um valor`;
+      return `the option ${quoted || 'given'} needs a value`;
     case 'ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL':
-      return `argumento inesperado: ${quoted}`;
+      return `unexpected argument: ${quoted}`;
     default:
       return message;
   }

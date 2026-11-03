@@ -29,7 +29,7 @@ const pipeTo = ({cmd, args}: Command, text: string) =>
   new Promise<void>((resolve, reject) => {
     const child = spawn(cmd, args, {stdio: ['pipe', 'ignore', 'ignore']});
     child.on('error', reject);
-    child.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd} saiu com código ${code}`))));
+    child.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd} exited with code ${code}`))));
     child.stdin.on('error', reject);
     child.stdin.end(text);
   });
