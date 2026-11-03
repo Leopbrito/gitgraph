@@ -1144,6 +1144,38 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('copy hash', () => {
+    it('y copies the full hash of the selected commit and confirms', async () => {
+      const copy = vi.fn().mockResolvedValue('native');
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} copy={copy} />);
+      await press(stdin, 'j', 'y');
+      await tick();
+      expect(copy).toHaveBeenCalledWith('h000001');
+      expect(lastFrame()).toContain('hash copiado: h000001');
+    });
+
+    it('with OSC 52 it cannot confirm, so it shows the whole hash', async () => {
+      const copy = vi.fn().mockResolvedValue('osc52');
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} copy={copy} />);
+      await press(stdin, 'y');
+      await tick();
+      expect(lastFrame()).toContain('OSC 52');
+      expect(lastFrame()).toContain('h000000');
+    });
+
+    it('shows the hash when copying fails or there is no way to copy', async () => {
+      const failing = vi.fn().mockRejectedValue(new Error('no clipboard'));
+      const first = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} copy={failing} />);
+      await press(first.stdin, 'y');
+      await tick();
+      expect(first.lastFrame()).toContain('não foi possível copiar; hash: h000000');
+
+      const second = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(second.stdin, 'y');
+      expect(second.lastFrame()).toContain('hash: h000000');
+    });
+  });
+
   describe('refresh', () => {
     /** The history grown by one commit on top: what a `git commit` elsewhere would produce. */
     const grown = (): GraphData => {

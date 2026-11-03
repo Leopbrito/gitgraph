@@ -15,6 +15,7 @@ import {
   type MergeResult,
   type MergeTarget,
 } from '../git/merge.js';
+import type {CopyMethod} from '../clipboard.js';
 import type {ChangesActions} from '../git/changes.js';
 import type {ChangeSource} from '../git/watch.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
@@ -65,6 +66,8 @@ interface Props {
   mouse?: MouseSource;
   /** Fires when the repository changed outside the TUI (--watch); reloads the graph. */
   watch?: ChangeSource;
+  /** Puts text on the clipboard (key y); without it the hash is only shown. */
+  copy?: (text: string) => Promise<CopyMethod>;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -81,7 +84,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -390,6 +393,18 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
     else if ((key.return || input === 'd') && commit) setViewing(true);
+    else if (input === 'y' && commit) {
+      const hash = commit.hash;
+      if (!copy) setNotice(`hash: ${hash}`);
+      else {
+        copy(hash)
+          .then(method =>
+            // OSC 52 gets no reply: show the whole hash so it can be taken by hand if nothing was pasted.
+            setNotice(method === 'native' ? `hash copiado: ${hash.slice(0, 7)}` : `hash enviado ao terminal (OSC 52): ${hash}`),
+          )
+          .catch(() => setNotice(`não foi possível copiar; hash: ${hash}`));
+      }
+    }
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});

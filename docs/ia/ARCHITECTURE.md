@@ -30,6 +30,7 @@ repositório git ──▶ leitura dos dados ──▶ montagem do grafo ──�
 src/
   cli.tsx          # entrada: argumentos, carga dos dados e escolha entre Browser (TTY) e texto puro (pipe)
   terminalMouse.ts # liga/desliga o mouse do terminal (modos 1000/1006) e tira os relatórios do stdin antes do Ink
+  clipboard.ts     # copyText(): programa nativo (pbcopy/wl-copy/xclip/xsel/clip) ou OSC 52; osc52() e clipboardCommands() puros
   args.ts          # parseCliArgs() (util.parseArgs), HELP e UsageError
   git/
     exec.ts        # executa `git` (execFile, LC_ALL=C), traduz os erros comuns; opção `network` para remotas
@@ -120,6 +121,10 @@ Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo
 `r` chama `reload(revs, limit, false, {follow: true, notice})`. Com `follow`, depois da carga o cursor vai para `followCommit(linhasAntes, selecionado, linhasDepois)`: o mesmo hash; senão o ancestral mais próximo que ainda está na lista (andando pelos pais); senão a mesma posição. As linhas "de antes" vêm de uma ref (`latest`) atualizada a cada render, porque a promessa resolve depois e o estado do closure já seria velho. O resto do fluxo é o `reload` de sempre, então um pedido mais novo descarta o anterior (`request`) e a falha vira o erro do rodapé sem trocar a lista. Os outros `reload` (checkout, merge) mantêm o cursor por posição, como antes.
 
 `--watch` liga `watchRepository` (`git/watch.ts`): `fs.watch` não recursivo no diretório git (e no comum, num worktree ligado), filtrando `HEAD`, `index`, `packed-refs` e `MERGE_HEAD`, mais um `fs.watch` recursivo em `refs/`. Um comando git mexe em vários arquivos, então os eventos têm debounce de 300 ms. O `Browser` recebe a fonte como `watch?: ChangeSource`, como `load` e `mouse`, e cada evento faz o mesmo reload do `r`. **Cuidado:** o que a TUI roda para se recarregar não pode alterar o que se observa, ou o `--watch` entra em laço. Hoje só `git log`/`for-each-ref` (somente leitura); qualquer `git status` novo deve usar `--no-optional-locks`, que impede o git de regravar o índice.
+
+### Copiar o hash (`y`)
+
+`Browser` recebe `copy?: (text) => Promise<CopyMethod>` por parâmetro (a CLI passa `copyText`). `copyText` (em `clipboard.ts`, com `platform`, `env`, `write` e `run` injetáveis para teste) tenta primeiro um programa nativo, porque o código de saída diz se funcionou; só então cai no **OSC 52** (`ESC ] 52 ; c ; <base64> BEL`), escrito direto no stdout. Por SSH (`SSH_CONNECTION`/`SSH_TTY`) pula os programas nativos, que copiariam para a área de transferência da máquina remota, e usa só o OSC 52. O resultado informa o método: com `native` o rodapé confirma com o hash curto; com `osc52`, que não tem resposta e portanto não dá para confirmar, mostra o hash inteiro; se tudo falhar (ou não houver `copy`), mostra o hash. Não há dependência nova, e o tmux só repassa o OSC 52 com `set-clipboard on`.
 
 ### Mouse
 

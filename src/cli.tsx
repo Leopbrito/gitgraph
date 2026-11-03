@@ -8,6 +8,7 @@ import {HELP, parseCliArgs, UsageError} from './args.js';
 import {gitChanges} from './git/changes.js';
 import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
+import {copyText} from './clipboard.js';
 import {describeFilters, loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {verifyRevisions} from './git/revs.js';
@@ -92,6 +93,7 @@ async function main() {
           }}
           mouse={terminalMouse?.source}
           watch={repoWatch?.source}
+          copy={text => copyText(text)}
         />
       </DisplayContext.Provider>,
       {alternateScreen: true},
