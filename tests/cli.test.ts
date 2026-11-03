@@ -7,14 +7,15 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {createRepo} from './git/helpers.js';
 
 const exec = promisify(execFile);
-const tsx = join(import.meta.dirname, '..', 'node_modules', '.bin', 'tsx');
+// Run tsx's own entry with the current node: node_modules/.bin/tsx is a shell script that Windows cannot exec.
+const tsxCli = join(import.meta.dirname, '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const entry = join(import.meta.dirname, '..', 'src', 'cli.tsx');
 
 /** Runs the CLI with stdout piped, so it prints plain text. */
 const gitgraph = (cwd: string, ...args: string[]) => gitgraphEnv(cwd, {}, ...args);
 
 const gitgraphEnv = (cwd: string, env: Record<string, string>, ...args: string[]) =>
-  exec(tsx, [entry, ...args], {cwd, env: {...process.env, NO_COLOR: '1', ...env}}).then(
+  exec(process.execPath, [tsxCli, entry, ...args], {cwd, env: {...process.env, NO_COLOR: '1', ...env}}).then(
     ({stdout}) => ({stdout, code: 0, stderr: ''}),
     (error: {stdout: string; stderr: string; code: number}) => ({stdout: error.stdout, stderr: error.stderr, code: error.code}),
   );
@@ -69,7 +70,8 @@ describe('cli (pipe mode)', () => {
 });
 
 describe('cli (pipe mode, long output)', () => {
-  it('writes the whole history, aligned, and ends quietly when the reader stops early', async () => {
+  // `sh` and `head` are not there on Windows.
+  it.skipIf(process.platform === 'win32')('writes the whole history, aligned, and ends quietly when the reader stops early', async () => {
     const {dir, run} = repo();
     for (let i = 0; i < 120; i++) run('commit', '--allow-empty', '-q', '-m', `more ${i}`);
     const all = (await gitgraph(dir)).stdout.trimEnd().split('\n');
@@ -77,7 +79,7 @@ describe('cli (pipe mode, long output)', () => {
     expect(all.filter(line => line.includes('Ana,'))).toHaveLength(123);
 
     // `| head -1` closes the pipe long before the end: no error, exit status of head.
-    const head = await exec('sh', ['-c', `${tsx} ${entry} | head -1; echo "status=\${PIPESTATUS:-ok}"`], {
+    const head = await exec('sh', ['-c', `"${process.execPath}" "${tsxCli}" "${entry}" | head -1`], {
       cwd: dir,
       env: {...process.env, NO_COLOR: '1'},
     }).catch((error: {stdout: string; stderr: string}) => error);

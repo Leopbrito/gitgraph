@@ -26,3 +26,22 @@ jobs:
       - run: npm test
       # What would be published: only dist, README and LICENSE.
       - run: npm pack --dry-run
+
+  # Windows is supported (the clipboard has a `clip` path) but the tests have not run there before:
+  # report the result without blocking until it is known to be green, then drop continue-on-error.
+  windows:
+    name: Node 22 on windows-latest
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      # The tests compare git's output with exact text: no CRLF conversion.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test

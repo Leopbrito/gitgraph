@@ -7,3 +7,4 @@
 - **Desenhos do grafo:** confira a saída à mão contra o `git log --graph` antes de fixá-la como expectativa; não copie o que o código devolveu sem conferir.
 - Mudou o formato de saída? Atualize os testes que o fixam e diga isso no commit.
 - Antes de concluir: `npm run typecheck`, `npm run build` e `npm test`.
+- **Windows.** O CI roda os testes também no `windows-latest`, por enquanto num job que não bloqueia (`continue-on-error`). Os testes de CLI chamam o `cli.mjs` do tsx com o `node` atual (não o `.bin/tsx`, que é um script de shell); o que depende de `sh` ou `head` usa `it.skipIf(process.platform === 'win32')`. Quando o job estiver verde, tire o `continue-on-error`.
