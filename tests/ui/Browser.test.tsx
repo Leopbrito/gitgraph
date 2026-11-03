@@ -6,6 +6,7 @@ import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
 import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
+import {StashConflictError, type StashOp} from '../../src/git/stash.js';
 import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
 import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
 import {DisplayContext} from '../../src/ui/display.js';
@@ -555,6 +556,82 @@ describe('Browser', () => {
         },
       };
     };
+
+    describe('apply, pop and drop', () => {
+      const run = (stash: (op: StashOp, hash: string) => Promise<string>, load = vi.fn<LoadGraph>().mockImplementation(() => Promise.resolve(withStash()))) => {
+        const rendered = render(<Browser initial={withStash()} initialLimit={100} load={load} stash={stash} />);
+        return {...rendered, load};
+      };
+
+      it('a applies and p pops the selected stash, then reloads and says what happened', async () => {
+        const stash = vi.fn().mockResolvedValue('stash@{0}');
+        const {lastFrame, stdin, load} = run(stash);
+        await press(stdin, 'a');
+        await tick();
+        expect(stash).toHaveBeenCalledWith('apply', 'h000000');
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(lastFrame()).toContain('stash@{0} aplicado (continua guardado)');
+
+        await press(stdin, 'p');
+        await tick();
+        expect(stash).toHaveBeenLastCalledWith('pop', 'h000000');
+        expect(lastFrame()).toContain('stash@{0} aplicado e removido');
+      });
+
+      it('x asks before dropping: n cancels, y drops', async () => {
+        const stash = vi.fn().mockResolvedValue('stash@{0}');
+        const {lastFrame, stdin} = run(stash);
+        await press(stdin, 'x');
+        expect(lastFrame()).toContain('Apagar stash@{0}?');
+        expect(lastFrame()).toContain('Enter/y confirma');
+        await press(stdin, 'n');
+        expect(stash).not.toHaveBeenCalled();
+        expect(lastFrame()).not.toContain('Apagar stash@{0}?');
+
+        await press(stdin, 'x', 'y');
+        await tick();
+        expect(stash).toHaveBeenCalledWith('drop', 'h000000');
+        expect(lastFrame()).toContain('stash@{0} apagado');
+      });
+
+      it('other keys do nothing while the drop is being confirmed', async () => {
+        const stash = vi.fn().mockResolvedValue('stash@{0}');
+        const {lastFrame, stdin} = run(stash);
+        await press(stdin, 'x', 'j', 'a', 'q');
+        expect(stash).not.toHaveBeenCalled();
+        expect(lastFrame()).toContain('Apagar stash@{0}?');
+        await press(stdin, '\u001B');
+        expect(lastFrame()).not.toContain('Apagar');
+      });
+
+      it('on conflicts it reloads, keeps the stash and lists the files', async () => {
+        const stash = vi.fn().mockRejectedValue(new StashConflictError('pop', 'stash@{0}', ['a.txt', 'b.txt']));
+        const {lastFrame, stdin, load} = run(stash);
+        await press(stdin, 'p');
+        await tick();
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(lastFrame()).toContain('stash@{0}: conflitos em a.txt, b.txt; resolva no terminal (stash mantido)');
+      });
+
+      it('other failures show the reason and do not reload', async () => {
+        const stash = vi.fn().mockRejectedValue(new Error('as alterações locais atrapalham'));
+        const {lastFrame, stdin, load} = run(stash);
+        await press(stdin, 'a');
+        await tick();
+        expect(lastFrame()).toContain('erro: as alterações locais atrapalham');
+        expect(load).not.toHaveBeenCalled();
+      });
+
+      it('only works on a stash row', async () => {
+        const stash = vi.fn();
+        const {lastFrame, stdin} = run(stash);
+        await press(stdin, 'j', 'a');
+        expect(lastFrame()).toContain('só vale em um stash');
+        await press(stdin, 'x');
+        expect(lastFrame()).not.toContain('Apagar');
+        expect(stash).not.toHaveBeenCalled();
+      });
+    });
 
     it('shows the stash as a hollow node with its label', () => {
       const {lastFrame} = render(<Browser initial={withStash()} initialLimit={100} load={vi.fn()} />);

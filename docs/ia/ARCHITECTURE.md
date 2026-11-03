@@ -41,7 +41,7 @@ src/
     watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
     status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
     fetch.ts       # fetchAll(): `git fetch --all --prune` com `network: true`; traduz falha de autenticação
-    stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
+    stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n}); runStash() (apply/pop/drop) e StashConflictError
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
     changes.ts     # parseChanges()/splitDiff() (puros), loadChanges()/loadDiff()/loadFullDiff() via `git diff-tree`, gitChanges() (ChangesActions com cache), DIFF_MAX_LINES e FULL_DIFF_MAX_LINES
@@ -64,6 +64,7 @@ src/
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
     CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
     MergePrompt.tsx # confirmação do merge (idem)
+    ConfirmPrompt.tsx # pergunta sim/não genérica (título e linhas), usada no drop de stash
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
     mouse.ts       # parseMouse(): relatórios SGR -> eventos de clique/roda (puro); MouseSource
@@ -119,6 +120,10 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 `s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
+
+### Operações de stash (`a`, `p`, `x`)
+
+Valem na linha de um stash (em outra, só avisam). `Browser.stash(op, hash)` (injetado como `load`; a CLI passa `runStash`) recebe o **hash do commit do stash**, não `stash@{n}`: o número desloca quando outro stash é criado ou apagado (até por outro terminal), e agir pelo número poderia apagar o stash errado. `runStash` relê `git stash list`, acha o nome atual pelo hash e falha com "esse stash não existe mais" se ele sumiu. `apply` e `pop` rodam direto, porque guardam ou devolvem as alterações; só o `drop` pede confirmação (`ConfirmPrompt`), por ser irreversível. Falhas: se o git deixa arquivos em conflito (`conflictedFiles`, o mesmo helper do merge), vira `StashConflictError`: as marcas ficam no working tree, o stash **é mantido** (o `pop` não apaga quando há conflito), o `Browser` recarrega e lista os arquivos. Ao contrário do merge não há "abortar" (`apply` não deixa um estado do qual o git saiba voltar), então o fluxo só informa. Se alterações locais estão no caminho (`would be overwritten`, arquivo não rastreado existente), o git recusa sem mudar nada e a mensagem diz para fazer commit ou stash antes. Depois de qualquer sucesso, `reload` com `follow`: um stash removido faz o cursor ir para o commit-base.
 
 ### Upstream e fetch (`f`)
 

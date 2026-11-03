@@ -10,6 +10,7 @@ import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadConfig} from './config.js';
 import {copyText} from './clipboard.js';
+import {runStash} from './git/stash.js';
 import {fetchAll} from './git/fetch.js';
 import {describeFilters, loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
@@ -97,6 +98,7 @@ async function main() {
           watch={repoWatch?.source}
           copy={text => copyText(text)}
           fetch={() => fetchAll(cwd)}
+          stash={(op, hash) => runStash(cwd, op, hash)}
         />
       </DisplayContext.Provider>,
       {alternateScreen: true},

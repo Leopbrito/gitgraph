@@ -18,11 +18,13 @@ import {
 import type {CopyMethod} from '../clipboard.js';
 import type {ChangesActions} from '../git/changes.js';
 import type {ChangeSource} from '../git/watch.js';
+import {StashConflictError, type StashOp} from '../git/stash.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
 import {BranchPicker} from './BranchPicker.js';
 import {CheckoutPrompt} from './CheckoutPrompt.js';
+import {ConfirmPrompt} from './ConfirmPrompt.js';
 import {ConflictPrompt} from './ConflictPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {CommitView} from './CommitView.js';
@@ -70,6 +72,8 @@ interface Props {
   copy?: (text: string) => Promise<CopyMethod>;
   /** Fetches the remotes (key f); rejects with a one-line reason. */
   fetch?: () => Promise<void>;
+  /** Applies, pops or drops the stash whose commit has this hash; resolves to the stash name. */
+  stash?: (op: StashOp, hash: string) => Promise<string>;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -86,7 +90,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch, stash}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -105,6 +109,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
+  // Dropping a stash is the only stash action that asks first: apply and pop keep the changes.
+  const [dropping, setDropping] = useState<{hash: string; name: string} | null>(null);
   // Active search (highlight, n/N); `typing` is set while the input is open.
   const [query, setQuery] = useState('');
   const [typing, setTyping] = useState<{origin: number; previous: string} | null>(null);
@@ -260,6 +266,33 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       });
   };
 
+  const stashName = (hash: string) => refsOf(hash).find(r => r.kind === 'stash')?.name ?? 'o stash';
+
+  const runStash = (op: StashOp, hash: string) => {
+    if (!stash) return;
+    setDropping(null);
+    setLoading(true);
+    setError(null);
+    stash(op, hash)
+      .then(name => {
+        const done = {apply: `${name} aplicado (continua guardado)`, pop: `${name} aplicado e removido`, drop: `${name} apagado`}[op];
+        // The changes are in the working tree (or the stash is gone): the graph changes either way.
+        reload(revs, limit, false, {follow: true, notice: done});
+      })
+      .catch(e => {
+        if (e instanceof StashConflictError) {
+          const listed = e.files.slice(0, 3).join(', ') + (e.files.length > 3 ? ` +${e.files.length - 3}` : '');
+          reload(revs, limit, false, {
+            follow: true,
+            notice: `${e.name}: conflitos em ${listed}; resolva no terminal (stash mantido)`,
+          });
+        } else {
+          setLoading(false);
+          setError(failure(e));
+        }
+      });
+  };
+
   const leaveMerge = () => {
     setConflict(null);
     setNotice('merge deixado em andamento: resolva no terminal ou aperte m para abortar');
@@ -274,7 +307,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker || typing) return;
+    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -295,6 +328,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   useInput((input, key) => {
     // The commit view has its own keys.
     if (viewing) return;
+
+    if (dropping) {
+      if (key.escape || input === 'n') setDropping(null);
+      else if (key.return || input === 'y') runStash('drop', dropping.hash);
+      return;
+    }
 
     if (mergePrompt) {
       const single = mergePrompt.targets.length === 1;
@@ -432,6 +471,13 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           });
       }
     }
+    else if (input === 'a' || input === 'p' || input === 'x') {
+      if (!commit?.stash) setNotice('esta tecla só vale em um stash (a aplica, p dá pop, x apaga)');
+      else if (!stash) setNotice('operações de stash indisponíveis');
+      else if (loading) setNotice('espere a carga terminar');
+      else if (input === 'x') setDropping({hash: commit.hash, name: stashName(commit.hash)});
+      else runStash(input === 'a' ? 'apply' : 'pop', commit.hash);
+    }
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
@@ -495,6 +541,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     ? confirmHint(prompt.targets.length)
     : mergePrompt
       ? confirmHint(mergePrompt.targets.length)
+      : dropping
+        ? confirmHint(1)
       : conflict
         ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
         : typing
@@ -560,6 +608,15 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           targets={mergePrompt.targets}
           index={mergePrompt.index}
           branch={data.refs.head.branch ?? ''}
+        />
+      ) : dropping ? (
+        <ConfirmPrompt
+          danger
+          title={`Apagar ${dropping.name}?`}
+          lines={[
+            'As alterações guardadas serão perdidas: o git não as devolve depois do drop.',
+            'Para mantê-las, aplique (a) antes ou use o pop (p), que aplica e apaga.',
+          ]}
         />
       ) : conflict ? (
         <ConflictPrompt files={conflict.files} index={conflict.index} />
