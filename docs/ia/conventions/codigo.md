@@ -1,10 +1,10 @@
-# Convenções de código
+# Code conventions
 
-- **TypeScript estrito** (`strict` e `noUncheckedIndexedAccess`), ESM com `NodeNext`: os imports relativos levam a extensão `.js` (`import {x} from './x.js'`).
-- **Módulos puros primeiro.** `graph/` e `git/parse.ts` não dependem de UI nem de processo: recebem dados e devolvem dados. Só `git/exec.ts` e `cli.tsx` tocam o sistema.
-- **A UI recebe dependências por props.** O `Browser` recebe `load(rev, limit)` em vez de chamar o git, o que permite testá-lo com dados falsos.
-- **Opções de exibição por contexto** (`ui/display.ts`: cor e ASCII), não por props repassadas em todos os componentes.
-- **Comentários em português**, só onde o porquê não é óbvio (decisões, armadilhas do git ou do Ink), não para repetir o código.
-- **Sem linter além do `tsc`.** O projeto não usa ESLint (decisão: não vale uma dependência e uma configuração a mais para um código deste tamanho); `strict` e os testes são a rede. Por isso não há comentários `eslint-disable`: onde uma regra de hooks seria quebrada de propósito (dependências de um `useEffect` que são só algumas), o comentário explica o motivo. Se um dia houver lint, ele entra com um `npm run lint` e um passo no CI.
-- **Sem dependência nova sem justificativa.** Preferir a biblioteca padrão do Node (ex.: `util.parseArgs`).
-- **Mudou uma decisão de arquitetura ou convenção?** Atualize `ARCHITECTURE.md` e esta pasta no mesmo trabalho.
+- **Strict TypeScript** (`strict` and `noUncheckedIndexedAccess`), ESM with `NodeNext`: relative imports carry the `.js` extension (`import {x} from './x.js'`).
+- **Pure modules first.** `graph/` and `git/parse.ts` depend on neither the UI nor the process: they receive data and return data. Only `git/exec.ts` and `cli.tsx` touch the system.
+- **The UI receives its dependencies through props.** `Browser` receives `load(rev, limit)` instead of calling git, which lets it be tested with fake data.
+- **Display options through context** (`ui/display.ts`: color and ASCII), not through props passed down to every component.
+- **Everything is in English**: the code, the comments, the interface texts (`--help`, footers, dialogs, errors) and the documentation. Comments only where the why is not obvious (decisions, git or Ink traps), not to repeat the code. The code recognizes git's output (always English because of `LC_ALL=C`), never the project's own messages.
+- **No linter besides `tsc`.** The project does not use ESLint (decision: an extra dependency and configuration are not worth it for code this size); `strict` and the tests are the safety net. That is why there are no `eslint-disable` comments: where a hooks rule is broken on purpose (the dependencies of a `useEffect` that are only some), the comment explains why. If there is ever a linter, it comes with an `npm run lint` and a CI step.
+- **No new dependency without a justification.** Prefer Node's standard library (e.g. `util.parseArgs`).
+- **Did an architecture or convention decision change?** Update `ARCHITECTURE.md` and this folder in the same piece of work.

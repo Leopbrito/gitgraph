@@ -1,60 +1,60 @@
-# Publicação no npm
+# Publishing to npm
 
-O pacote se chama **`git-graph-tui`** e instala o comando **`gitgraph`** (o campo `bin` é independente do nome do pacote). O nome `gitgraph` já pertence a outro pacote no npm, e `gitgraph-tui` e `gitgraph-cli` também. Para mudar o nome, altere `name` em `package.json` e as instruções de instalação do README; nada mais depende dele.
+The package is called **`git-graph-tui`** and installs the **`gitgraph`** command (the `bin` field is independent of the package name). The name `gitgraph` already belongs to another package on npm, and so do `gitgraph-tui` and `gitgraph-cli`. To change the name, change `name` in `package.json` and the installation instructions in the README; nothing else depends on it.
 
-**Publicar é uma ação externa e irreversível** (uma versão publicada não pode ser reutilizada, só despublicada em até 72 horas). Nenhum agente publica sem pedido explícito; o fluxo normal é o workflow de release.
+**Publishing is an external, irreversible action** (a published version cannot be reused, only unpublished within 72 hours). No agent publishes without an explicit request; the normal flow is the release workflow.
 
-## O que vai no pacote
+## What goes in the package
 
-`files` em `package.json` limita a publicação a `dist/`, `README.md` e `LICENSE` (o `package.json` entra sempre). Nada de `src/`, `tests/` nem `docs/`. Confira com:
+`files` in `package.json` limits the publication to `dist/`, `README.md` and `LICENSE` (`package.json` always goes in). No `src/`, `tests/` or `docs/`. Check with:
 
 ```sh
 npm pack --dry-run
 ```
 
-O `prebuild` apaga `dist/` antes de compilar, para arquivos de uma compilação antiga não irem junto. O `bin` aponta para `dist/cli.js`, que começa com `#!/usr/bin/env node`; o npm marca o arquivo como executável na instalação.
+`prebuild` deletes `dist/` before compiling, so files from an old build do not go along. `bin` points to `dist/cli.js`, which starts with `#!/usr/bin/env node`; npm marks the file executable on install.
 
-## Versionamento
+## Versioning
 
-[SemVer](https://semver.org/lang/pt-BR/): enquanto estiver em `0.x`, uma mudança incompatível (opção removida, tecla trocada, formato do arquivo de configuração) sobe o número do meio (`0.1.0` → `0.2.0`), e correções e novidades compatíveis sobem o último. A `1.0.0` sai quando a interface de linha de comando e o formato do `config.json` forem considerados estáveis.
+[SemVer](https://semver.org/): while in `0.x`, an incompatible change (a removed option, a changed key, the config file format) bumps the middle number (`0.1.0` → `0.2.0`), and compatible fixes and features bump the last one. `1.0.0` comes when the command line interface and the `config.json` format are considered stable.
 
-## Como lançar uma versão
+## How to release a version
 
-1. Na `main`, com tudo commitado e a CI verde: `npm version minor` (ou `patch`/`major`). Isso muda `package.json`, cria o commit e a tag `vX.Y.Z`.
+1. On `main`, with everything committed and CI green: `npm version minor` (or `patch`/`major`). This changes `package.json`, creates the commit and the `vX.Y.Z` tag.
 2. `git push --follow-tags`.
-3. O workflow `.github/workflows/release.yml` confere que a tag bate com a versão do `package.json`, roda `prepublishOnly` (typecheck, testes e build), publica com `--provenance` e cria a release no GitHub com as notas geradas dos commits.
+3. The `.github/workflows/release.yml` workflow checks that the tag matches the `package.json` version, runs `prepublishOnly` (typecheck, tests and build), publishes with `--provenance` and creates the GitHub release with notes generated from the commits.
 
-### Configuração única
+### One-time setup
 
-Duas formas de o workflow se autenticar no npm; o npm tenta a primeira e cai na segunda ([docs](https://docs.npmjs.com/trusted-publishers)).
+There are two ways for the workflow to authenticate with npm; npm tries the first and falls back to the second ([docs](https://docs.npmjs.com/trusted-publishers)).
 
-**1. Trusted publishing (OIDC), recomendado: nenhum segredo guardado.** Exige npm CLI 11.5.1+ e Node 22.14+ (o workflow atualiza o npm) e `id-token: write` (já está nas permissões). Falta só o cadastro, que é no site e só o dono do pacote faz:
+**1. Trusted publishing (OIDC), recommended: no stored secret.** It needs npm CLI 11.5.1+ and Node 22.14+ (the workflow upgrades npm) and `id-token: write` (already in the permissions). Only the registration is missing, which is done on the website and only the package owner can do it:
 
-1. npmjs.com → pacote `git-graph-tui` → *Settings* → *Trusted publishing* → GitHub Actions.
-2. Preencha **Organization or user** = `Leopbrito`, **Repository** = `gitgraph`, **Workflow filename** = `release.yml` (só o nome, com a extensão; tudo diferencia maiúsculas). O `repository.url` do `package.json` tem de bater com o repositório.
-3. O npm não valida ao salvar: o erro só aparece ao publicar, e uma configuração nova expira se não houver uma publicação bem-sucedida em 2 dias. Faça a próxima versão logo em seguida.
-4. Depois de uma publicação que funcionou por OIDC: apague o bloco `env: NODE_AUTH_TOKEN` do passo de publicação, **revogue o token** no npm, apague o secret `NPM_TOKEN` do repositório e, em *Publishing access*, marque "Require two-factor authentication and disallow tokens". A proveniência passa a ser gerada sozinha (o `--provenance` pode ficar ou sair).
+1. npmjs.com → package `git-graph-tui` → *Settings* → *Trusted publishing* → GitHub Actions.
+2. Fill in **Organization or user** = `Leopbrito`, **Repository** = `gitgraph`, **Workflow filename** = `release.yml` (the name only, with the extension; everything is case-sensitive). The `repository.url` in `package.json` must match the repository.
+3. npm does not validate when saving: the error only shows up when publishing, and a new configuration expires if there is no successful publish within 2 days. Make the next release right after.
+4. After a publish that worked through OIDC: delete the `env: NODE_AUTH_TOKEN` block from the publish step, **revoke the token** on npm, delete the `NPM_TOKEN` secret from the repository and, under *Publishing access*, check "Require two-factor authentication and disallow tokens". Provenance is then generated by itself (`--provenance` can stay or go).
 
-Limites: só runners hospedados pelo GitHub; sem cache no build de release (por isso o `package-manager-cache: false`).
+Limits: GitHub-hosted runners only; no cache in the release build (hence `package-manager-cache: false`).
 
-**2. Token de automação (o fallback, enquanto o passo 1 não foi feito).** Crie um token no npm (Access Tokens → Granular, com permissão de publicação) e guarde-o em *Settings → Secrets and variables → Actions* do repositório como `NPM_TOKEN`. Nunca em arquivo, commit ou conversa.
+**2. Automation token (the fallback, until step 1 is done).** Create a token on npm (Access Tokens → Granular, with publish permission) and store it under the repository's *Settings → Secrets and variables → Actions* as `NPM_TOKEN`. Never in a file, a commit or a conversation.
 
-Em qualquer caso, a primeira publicação de um nome novo reivindica o nome: confira antes que `npm view git-graph-tui` ainda dá 404.
+In either case, the first publish of a new name claims the name: check beforehand that `npm view git-graph-tui` still gives 404.
 
-## Publicar à mão (sem o workflow)
+## Publishing by hand (without the workflow)
 
 ```sh
 npm login
-npm publish --dry-run   # confira
+npm publish --dry-run   # check
 npm publish
 ```
 
-`prepublishOnly` roda typecheck, testes e build antes. A proveniência (`--provenance`) só existe em CI.
+`prepublishOnly` runs typecheck, tests and build first. Provenance (`--provenance`) only exists in CI.
 
-## Testando a instalação antes de publicar
+## Testing the installation before publishing
 
 ```sh
-npm pack                       # gera git-graph-tui-X.Y.Z.tgz
-mkdir /tmp/try && cd /tmp/try && npm init -y && npm install /caminho/git-graph-tui-X.Y.Z.tgz
+npm pack                       # produces git-graph-tui-X.Y.Z.tgz
+mkdir /tmp/try && cd /tmp/try && npm init -y && npm install /path/to/git-graph-tui-X.Y.Z.tgz
 ./node_modules/.bin/gitgraph --version
 ```

@@ -1,10 +1,10 @@
-# Convenções de testes
+# Test conventions
 
-- Runner: **Vitest** (`npm test`). Os testes ficam em `tests/`, espelhando `src/`.
-- **Lógica pura** (`parse`, `layout`, `glyphs`, `viewport`, `picker`, `args`): testes de tabela com commits sintéticos, sem git.
-- **Git de verdade:** use `createRepo()` de `tests/git/helpers.ts`, que cria um repositório temporário com autor fixo e `gpgsign` desligado, e limpe com `cleanup()`. Não dependa da ordem entre commits paralelos (o `--topo-order` não a garante).
-- **Componentes Ink:** `ink-testing-library`. Para teclas, escreva em `stdin` e espere um tick (veja `press()` em `tests/ui/Browser.test.tsx`). Em teste não há TTY, então não dá para afirmar sobre cores: teste texto e estrutura.
-- **Desenhos do grafo:** confira a saída à mão contra o `git log --graph` antes de fixá-la como expectativa; não copie o que o código devolveu sem conferir.
-- Mudou o formato de saída? Atualize os testes que o fixam e diga isso no commit.
-- Antes de concluir: `npm run typecheck`, `npm run build` e `npm test`.
-- **Windows.** O CI roda os testes também no `windows-latest`, por enquanto num job que não bloqueia (`continue-on-error`). Os testes de CLI chamam o `cli.mjs` do tsx com o `node` atual (não o `.bin/tsx`, que é um script de shell); o que depende de `sh` ou `head` usa `it.skipIf(process.platform === 'win32')`. Quando o job estiver verde, tire o `continue-on-error`.
+- Runner: **Vitest** (`npm test`). The tests live in `tests/`, mirroring `src/`.
+- **Pure logic** (`parse`, `layout`, `glyphs`, `viewport`, `picker`, `args`): table tests with synthetic commits, no git.
+- **Real git:** use `createRepo()` from `tests/git/helpers.ts`, which creates a temporary repository with a fixed author and `gpgsign` off, and clean up with `cleanup()`. Do not depend on the order between parallel commits (`--topo-order` does not guarantee it).
+- **Ink components:** `ink-testing-library`. For keys, write to `stdin` and wait a tick (see `press()` in `tests/ui/Browser.test.tsx`). There is no TTY in a test, so colors cannot be asserted: test text and structure.
+- **Graph drawings:** check the output by hand against `git log --graph` before fixing it as the expectation; do not copy what the code returned without checking.
+- Did the output format change? Update the tests that pin it and say so in the commit.
+- Before finishing: `npm run typecheck`, `npm run build` and `npm test`.
+- **Windows.** CI also runs the tests on `windows-latest`, for now in a job that does not block (`continue-on-error`). The CLI tests call tsx's `cli.mjs` with the current `node` (not `.bin/tsx`, which is a shell script); whatever depends on `sh` or `head` uses `it.skipIf(process.platform === 'win32')`. When the job is green, remove the `continue-on-error`.

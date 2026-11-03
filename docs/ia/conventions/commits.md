@@ -1,7 +1,7 @@
-# Convenções de commits
+# Commit conventions
 
-- **Nunca commitar nem dar push sem pedido explícito.** Antes de commitar, mostre o diff (ou a lista de arquivos) e a mensagem proposta e espere o OK; só então rode `git commit`.
-- Mensagens em **português**: título na 3ª pessoa do presente (`Adiciona…`, `Corrige…`, `Compacta…`), até ~70 caracteres, sem ponto final.
-- Corpo opcional, separado por linha em branco, com ~72 colunas por linha, explicando o **porquê** e o que muda para quem usa.
-- Um commit por mudança coesa (uma fase do plano, uma correção). Documentação alterada pela mudança vai no mesmo commit.
-- Antes de commitar, `npm run typecheck`, `npm run build` e `npm test` passam.
+- **Never commit or push without an explicit request.** Before committing, show the diff (or the list of files) and the proposed message and wait for the OK; only then run `git commit`.
+- Messages in **English**: an imperative title (`Add…`, `Fix…`, `Compact…`), up to ~70 characters, no final period.
+- Optional body, separated by a blank line, wrapped at ~72 columns, explaining the **why** and what changes for the user.
+- One commit per cohesive change (a phase of the plan, a fix). Documentation changed by the change goes in the same commit.
+- Before committing, `npm run typecheck`, `npm run build` and `npm test` pass.

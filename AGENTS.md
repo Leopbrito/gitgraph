@@ -1,24 +1,24 @@
 # AGENTS.md
 
-Guia para agentes de IA que trabalham neste repositório.
+Guide for AI agents working in this repository.
 
-## Sobre o projeto
+## About the project
 
-`gitgraph` é uma CLI que mostra o grafo de branches de um repositório git no terminal.
-A interface é construída com [Ink](https://github.com/vadimdemedes/ink) (React para CLIs).
+`gitgraph` is a CLI that shows the branch graph of a git repository in the terminal.
+The interface is built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs).
 
-## Documentação para agentes
+## Documentation for agents
 
-Leia antes de alterar o código:
+Read before changing the code:
 
-- [`docs/ia/ARCHITECTURE.md`](docs/ia/ARCHITECTURE.md): visão geral da arquitetura, módulos e fluxo de dados.
-- [`docs/ia/conventions/`](docs/ia/conventions/): convenções de código, testes, commits etc. Um arquivo por tema.
+- [`docs/ia/ARCHITECTURE.md`](docs/ia/ARCHITECTURE.md): overview of the architecture, modules and data flow.
+- [`docs/ia/conventions/`](docs/ia/conventions/): conventions for code, tests, commits etc. One file per topic.
 
-Quando uma decisão de arquitetura ou convenção mudar, atualize esses documentos no mesmo trabalho.
+When an architecture or convention decision changes, update these documents in the same piece of work.
 
-## Regras gerais
+## General rules
 
-- Responda e documente em português do Brasil.
-- Faça mudanças pequenas e focadas.
-- Não faça commit nem push sem pedido explícito. Antes de commitar, mostre o diff e a mensagem proposta e espere aprovação.
-- Não adicione dependências sem justificar a necessidade.
+- Write the code, the comments, the interface texts and the documentation in English.
+- Make small, focused changes.
+- Do not commit or push without an explicit request. Before committing, show the diff and the proposed message and wait for approval.
+- Do not add dependencies without justifying the need.
