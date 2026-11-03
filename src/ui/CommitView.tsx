@@ -2,6 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import type {ChangedFile, ChangesActions} from '../git/changes.js';
 import type {Commit, Ref} from '../graph/types.js';
+import {formatDate} from './date.js';
 import {separator, tint, useDisplay} from './display.js';
 import {DiffView} from './DiffView.js';
 import {formatRefs, type HeadInfo} from './format.js';
@@ -151,7 +152,7 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
         ))}
       </Text>
       <Text wrap="truncate-end" dimColor>
-        {`${commit.author} <${commit.email}> ${dot} ${commit.date.replace('T', ' ').slice(0, 16)}`}
+        {`${commit.author} <${commit.email}> ${dot} ${formatDate(commit.date, display.date ?? 'short', {detail: true})}`}
         {commit.parents.length > 0
           ? ` ${dot} pais: ${commit.parents.map(p => p.slice(0, 7)).join(', ')}`
           : ` ${dot} commit raiz`}

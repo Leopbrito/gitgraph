@@ -68,6 +68,7 @@ src/
     follow.ts      # followCommit(): onde está o commit selecionado depois de recarregar (puro)
     search.ts      # matchesCommit()/findMatches()/firstFrom()/nextMatch(): busca em memória nos commits carregados (puro)
     SearchPrompt.tsx # campo de busca (ocupa o lugar do painel de detalhes)
+    date.ts        # formatDate()/relativeDate(): datas curta, ISO e relativa (puro, o relógio é parâmetro)
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
     plain.ts       # formatPlain(): mesma saída em texto puro, para pipes (aceita ascii)
 tests/
@@ -161,6 +162,10 @@ Cada entrada do stash é um commit com 2 ou 3 pais: o commit-base e commits inte
 ### Filtros do log
 
 `LogFilters` (em `log.ts`) reúne `author`, `since`, `until`, `firstParent`, `hideRemotes` e `hideTags`; `LogOptions` os herda e `CliOptions.filters` os carrega da CLI até o `loadCommits`. Esconder remotas ou tags troca `--all` por `--branches` (+ `--tags`/`--remotes` do que fica) e `HEAD`, já que `--all` não sabe excluir um tipo de ref; só vale quando se usa `all`, ou seja, sem revisões explícitas. A armadilha é o `%P`: `--first-parent` ainda imprime todos os pais de um merge e `--author`/`--since`/`--until` não reescrevem os pais (só a limitação por caminho faz isso), então os pais apontariam para commits que não estão na lista e o layout deixaria lanes abertas esperando por eles. `relink` corrige: com `--first-parent` fica só o primeiro pai, e com filtro de autor ou data descartam-se os pais ausentes da lista. O custo é que o grafo filtrado mostra apenas as ligações diretas entre os commits que sobraram, sem ligar um commit ao seu ancestral mais próximo que também passou no filtro. `describeFilters` produz os rótulos do cabeçalho (`Browser.filters`).
+
+### Datas
+
+`--date short|iso|relative` (`DateStyle`, em `ui/date.ts`) chega aos componentes por `Display.date` (opcional, `short` quando falta) e a `formatPlain` por `date`. Tudo passa por `formatDate(iso, style, {now, detail})`; `detail` é verdadeiro nos painéis de um commit só (`CommitDetail`, `CommitView`), que têm espaço para a hora: o `short` mostra só o dia na lista e dia e hora nos detalhes, como antes. A data é a do autor no fuso em que foi gravada (o texto ISO do git), sem converter para o fuso local. O relativo usa `Intl.RelativeTimeFormat('pt-BR', {numeric: 'auto'})` (sem dependência) com a unidade maior que cabe; horas e dias são truncados e meses e anos arredondados, como o `git log --date=relative` (90 dias são "3 meses", não "2"). O relógio entra por parâmetro nos testes, mas a TUI não redesenha só porque o tempo passou: o relativo se atualiza em qualquer render (tecla, `r`).
 
 ### Opções e erros
 

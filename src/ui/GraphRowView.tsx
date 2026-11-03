@@ -7,6 +7,7 @@ import {
   type Cell,
 } from '../graph/glyphs.js';
 import type {GraphRow, Ref} from '../graph/types.js';
+import {formatDate} from './date.js';
 import {tint, useDisplay} from './display.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
@@ -47,7 +48,7 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false, mat
           <Text bold={matched} color={matched ? tint(display, 'yellow') : undefined}>
             {commit.subject}
           </Text>
-          <Text dimColor>{`  ${commit.author}, ${commit.date.slice(0, 10)}`}</Text>
+          <Text dimColor>{`  ${commit.author}, ${formatDate(commit.date, display.date ?? 'short')}`}</Text>
         </Text>
       </Text>
       {lines.connector && (

@@ -1,4 +1,5 @@
 import {parseArgs} from 'node:util';
+import {DATE_STYLES, type DateStyle} from './ui/date.js';
 import {COMMIT_ORDERS, type CommitOrder, type LogFilters} from './git/log.js';
 
 export interface CliOptions {
@@ -8,6 +9,8 @@ export interface CliOptions {
   ascii: boolean;
   /** One line per commit, without the connector line between them. */
   compact: boolean;
+  /** How commit dates are written. */
+  date: DateStyle;
   /** How commits are ordered (see `CommitOrder`). */
   order: CommitOrder;
   /** Show the stash entries in the graph. */
@@ -51,6 +54,7 @@ Opções:
       --no-color       desliga as cores (também vale a variável NO_COLOR)
       --ascii          usa só caracteres ASCII no grafo
       --compact        uma linha por commit, sem a linha de ligação entre eles
+      --date <formato> formato das datas: short (padrão), iso ou relative (há 3 dias)
       --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
       --no-stash       não mostra os stashes no grafo
       --watch          recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)
@@ -85,6 +89,7 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
         ascii: {type: 'boolean'},
         compact: {type: 'boolean'},
         order: {type: 'string'},
+        date: {type: 'string'},
         'no-stash': {type: 'boolean'},
         watch: {type: 'boolean'},
         'no-mouse': {type: 'boolean'},
@@ -106,11 +111,16 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
       `--order deve ser ${COMMIT_ORDERS.join(', ')} (recebido: "${order}")`,
     );
   }
+  const date = values.date ?? 'short';
+  if (!isDateStyle(date)) {
+    throw new UsageError(`--date deve ser ${DATE_STYLES.join(', ')} (recebido: "${date}")`);
+  }
   return {
     maxCount: raw === undefined ? undefined : Number(raw),
     color: !values['no-color'] && !env['NO_COLOR'],
     ascii: values.ascii ?? false,
     compact: values.compact ?? false,
+    date,
     order,
     stash: !values['no-stash'],
     filters: {
@@ -130,6 +140,8 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     version: values.version ?? false,
   };
 }
+
+const isDateStyle = (value: string): value is DateStyle => (DATE_STYLES as readonly string[]).includes(value);
 
 const isCommitOrder = (value: string): value is CommitOrder =>
   (COMMIT_ORDERS as readonly string[]).includes(value);

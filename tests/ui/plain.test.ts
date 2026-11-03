@@ -64,3 +64,16 @@ describe('formatPlain', () => {
     expect(formatPlain(rows, refs, {ascii: true})[0]).toMatch(/^o /);
   });
 });
+
+describe('formatPlain dates', () => {
+  const rows = layoutGraph([
+    {hash: 'aaaaaaa1', parents: [], author: 'Ana', email: 'a@x', date: '2026-03-04T10:00:00+00:00', subject: 'one', body: ''},
+  ]);
+  const refs = {byCommit: new Map(), head: {hash: null, branch: null, merging: false}};
+
+  it('keeps the short date by default and follows the style', () => {
+    expect(formatPlain(rows, refs)[0]).toContain('Ana, 2026-03-04');
+    expect(formatPlain(rows, refs, {date: 'iso'})[0]).toContain('Ana, 2026-03-04 10:00');
+    expect(formatPlain(rows, refs, {date: 'relative', now: new Date('2026-03-07T10:00:00Z')})[0]).toContain('Ana, há 3 dias');
+  });
+});

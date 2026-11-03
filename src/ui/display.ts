@@ -1,4 +1,5 @@
 import {createContext, useContext} from 'react';
+import type {DateStyle} from './date.js';
 
 /** Opções de exibição escolhidas na linha de comando. */
 export interface Display {
@@ -8,6 +9,8 @@ export interface Display {
   ascii: boolean;
   /** Linha de ligação entre todos os commits (`│`); desligado, uma linha por commit. */
   spaced: boolean;
+  /** How commit dates are written; `short` when absent. */
+  date?: DateStyle;
 }
 
 export const DisplayContext = createContext<Display>({color: true, ascii: false, spaced: true});

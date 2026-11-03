@@ -8,6 +8,7 @@ describe('parseCliArgs', () => {
       color: true,
       ascii: false,
       compact: false,
+      date: 'short',
       order: 'date',
       stash: true,
       filters: {},
@@ -142,5 +143,17 @@ describe('--watch', () => {
   it('is off by default and on with --watch', () => {
     expect(parseCliArgs([]).watch).toBe(false);
     expect(parseCliArgs(['--watch']).watch).toBe(true);
+  });
+});
+
+describe('--date', () => {
+  it('defaults to short and accepts the known styles', () => {
+    expect(parseCliArgs([]).date).toBe('short');
+    expect(parseCliArgs(['--date', 'iso']).date).toBe('iso');
+    expect(parseCliArgs(['--date=relative']).date).toBe('relative');
+  });
+
+  it('rejects an unknown style', () => {
+    expect(() => parseCliArgs(['--date=full'])).toThrow('--date deve ser short, iso, relative');
   });
 });

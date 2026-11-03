@@ -1144,6 +1144,25 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('date style', () => {
+    const withDate = (date: 'short' | 'iso' | 'relative') =>
+      render(
+        <DisplayContext.Provider value={{color: false, ascii: false, spaced: true, date}}>
+          <Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} />
+        </DisplayContext.Provider>,
+      ).lastFrame() ?? '';
+
+    it('writes the date in the list and details as asked', () => {
+      const short = withDate('short');
+      expect(short).toContain('Ana, 2026-03-04');
+      expect(short).toContain('2026-03-04 10:00');
+      expect(withDate('iso')).toContain('Ana, 2026-03-04 10:00');
+      const relative = withDate('relative');
+      expect(relative).toMatch(/Ana, há (\d+ (anos?|meses|mês)|\d+ semanas?)/);
+      expect(relative).toContain('(2026-03-04 10:00)');
+    });
+  });
+
   describe('copy hash', () => {
     it('y copies the full hash of the selected commit and confirms', async () => {
       const copy = vi.fn().mockResolvedValue('native');

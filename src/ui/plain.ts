@@ -1,13 +1,14 @@
 import type {RefInfo} from '../git/refs.js';
 import {cellsToText, renderGraphLines, toAscii, type Cell} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
+import {formatDate, type DateStyle} from './date.js';
 import {formatRefs} from './format.js';
 
 /** Grafo em texto puro (sem cor nem quebra), para pipes e redirecionamentos. */
 export function formatPlain(
   rows: GraphRow[],
   refs: RefInfo,
-  {ascii = false, spaced = false}: {ascii?: boolean; spaced?: boolean} = {},
+  {ascii = false, spaced = false, date = 'short', now}: {ascii?: boolean; spaced?: boolean; date?: DateStyle; now?: Date} = {},
 ): string[] {
   const fit = (cells: Cell[]) => (ascii ? toAscii(cells) : cells);
   const graphWidth = Math.max(1, ...rows.map(r => r.width));
@@ -22,7 +23,7 @@ export function formatPlain(
       .join('');
     const line =
       `${cellsToText(fit(node), graphWidth)} ${commit.hash.slice(0, 7)} ${labels}` +
-      `${commit.subject}  ${commit.author}, ${commit.date.slice(0, 10)}`;
+      `${commit.subject}  ${commit.author}, ${formatDate(commit.date, date, {now})}`;
     return connector ? [line, cellsToText(fit(connector)).trimEnd()] : [line];
   });
 }

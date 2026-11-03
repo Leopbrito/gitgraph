@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import type {Commit, Ref} from '../graph/types.js';
+import {formatDate} from './date.js';
 import {separator, tint, useDisplay} from './display.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
@@ -36,7 +37,7 @@ export function CommitDetail({commit, refs, head}: Props) {
         ))}
       </Text>
       <Text wrap="truncate-end" dimColor>
-        {`${commit.author} <${commit.email}> ${dot} ${commit.date.replace('T', ' ').slice(0, 16)}`}
+        {`${commit.author} <${commit.email}> ${dot} ${formatDate(commit.date, display.date ?? 'short', {detail: true})}`}
         {parents ? ` ${dot} pais: ${parents}` : ` ${dot} commit raiz`}
       </Text>
       <Text wrap="truncate-end" bold>

@@ -65,7 +65,7 @@ async function main() {
       if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0);
       throw error;
     });
-    for (const line of formatPlain(rows, refs, {ascii: options.ascii, spaced: !options.compact})) console.log(line);
+    for (const line of formatPlain(rows, refs, {ascii: options.ascii, spaced: !options.compact, date: options.date})) console.log(line);
     return;
   }
 
@@ -76,7 +76,7 @@ async function main() {
   const terminalMouse = options.mouse ? enableTerminalMouse(process.stdin, process.stdout) : undefined;
   try {
     const {waitUntilExit} = render(
-      <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact}}>
+      <DisplayContext.Provider value={{color: options.color, ascii: options.ascii, spaced: !options.compact, date: options.date}}>
         <Browser
           initial={initial}
           initialLimit={initialLimit}

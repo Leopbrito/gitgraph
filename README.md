@@ -46,6 +46,7 @@ gitgraph [opções] [<revisão>...] [-- <caminho>...]
 | `--no-color` | Desliga as cores (também vale a variável `NO_COLOR`). |
 | `--ascii` | Usa só caracteres ASCII no grafo e nos símbolos da interface. |
 | `--compact` | Uma linha por commit, sem a linha de ligação (`│`) entre eles. Por padrão, commits seguidos são ligados por um traço, o que ocupa mais linhas. |
+| `--date <formato>` | Formato das datas: `short` (padrão: `2026-03-04` na lista e `2026-03-04 10:00` nos detalhes), `iso` (data e hora em todo lugar) ou `relative` (`há 3 dias`, `ontem`; nos detalhes, com a hora exata entre parênteses). Vale também no pipe. A data é a do autor, no fuso em que foi gravada. |
 | `--order <ordem>` | Ordem dos commits: `date` (padrão, por data do commit), `author-date` (por data do autor) ou `topo` (mantém cada linha de história junta). A ordem por data intercala as branches e deixa o grafo bem mais estreito; `topo` pode ser melhor em históricos com poucas branches longas e simultâneas. |
 | `--no-stash` | Não mostra os stashes no grafo. |
 | `--watch` | Recarrega o grafo sozinho quando o repositório muda fora da interface (commit, checkout, fetch em outro terminal). Observa `HEAD`, o índice, `packed-refs` e `refs/` com espera de 300 ms. Sem a opção, use `r`. |
