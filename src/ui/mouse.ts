@@ -17,7 +17,7 @@ export interface MouseSource {
   subscribe(listener: MouseListener): () => void;
 }
 
-// eslint-disable-next-line no-control-regex, regexp/no-control-character -- SGR mouse reports start with ESC.
+// SGR mouse reports start with ESC.
 const SGR = /\u{1B}\[<(\d+);(\d+);(\d+)([Mm])/gu;
 
 /**
@@ -44,7 +44,7 @@ export function parseMouse(data: string): {events: MouseEvent[]; rest: string} {
 
 // The start of a report cut off before its final byte. Only `ESC [ <` is held back: a bare
 // `ESC` (or `ESC [`) at the end of a chunk is more likely the Esc key than a split report.
-// eslint-disable-next-line no-control-regex, regexp/no-control-character -- SGR mouse reports start with ESC.
+// SGR mouse reports start with ESC.
 const INCOMPLETE = /\u{1B}\[<[\d;]{0,16}$/u;
 
 /**

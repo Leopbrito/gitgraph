@@ -5,5 +5,6 @@
 - **A UI recebe dependências por props.** O `Browser` recebe `load(rev, limit)` em vez de chamar o git, o que permite testá-lo com dados falsos.
 - **Opções de exibição por contexto** (`ui/display.ts`: cor e ASCII), não por props repassadas em todos os componentes.
 - **Comentários em português**, só onde o porquê não é óbvio (decisões, armadilhas do git ou do Ink), não para repetir o código.
+- **Sem linter além do `tsc`.** O projeto não usa ESLint (decisão: não vale uma dependência e uma configuração a mais para um código deste tamanho); `strict` e os testes são a rede. Por isso não há comentários `eslint-disable`: onde uma regra de hooks seria quebrada de propósito (dependências de um `useEffect` que são só algumas), o comentário explica o motivo. Se um dia houver lint, ele entra com um `npm run lint` e um passo no CI.
 - **Sem dependência nova sem justificativa.** Preferir a biblioteca padrão do Node (ex.: `util.parseArgs`).
 - **Mudou uma decisão de arquitetura ou convenção?** Atualize `ARCHITECTURE.md` e esta pasta no mesmo trabalho.

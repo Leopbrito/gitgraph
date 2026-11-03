@@ -68,10 +68,12 @@ export function DiffView({commit, target, changes, onClose}: Props) {
   const kinds = useMemo(() => (diff && mode === 'unified' ? classifyDiff(diff.lines) : []), [diff, mode]);
   const total = mode === 'split' ? rows.length : (diff?.lines.length ?? 0);
 
-  // A whole file starts at line 1, far from what changed: open on the first change.
+  // A whole file starts at line 1, far from what changed: open on the first change. Only a new diff or
+  // another mode repositions the view (the dependencies are deliberately just those two): a resize
+  // changes `height` and must not jump back to the first change.
   useEffect(() => {
     setScroll(mode === 'split' && starts[0] !== undefined ? scrollBy(0, starts[0] - JUMP_MARGIN, rows.length, height) : 0);
-  }, [diff, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [diff, mode]);
 
   useInput((input, key) => {
     const go = (delta: number) => setScroll(current => scrollBy(current, delta, total, height));
