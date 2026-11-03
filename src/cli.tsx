@@ -13,10 +13,10 @@ import {copyText} from './clipboard.js';
 import {gitHistoryActions} from './git/history.js';
 import {gitOperationActions} from './git/operation.js';
 import {gitRefActions} from './git/refsEdit.js';
-import {runStash} from './git/stash.js';
+import {loadStashes, runStash} from './git/stash.js';
 import {fetchAll} from './git/fetch.js';
 import {describeFilters, loadCommits, streamCommits, type LogOptions} from './git/log.js';
-import {loadRefs} from './git/refs.js';
+import {headHash, loadRefs} from './git/refs.js';
 import {verifyRevisions} from './git/revs.js';
 import {watchRepository} from './git/watch.js';
 import {enableTerminalMouse} from './terminalMouse.js';
@@ -56,7 +56,12 @@ async function main() {
   });
   // Refs are read on every load: after a checkout, HEAD has moved.
   const graph = async (revs: string[], maxCount: number | undefined) => {
-    const [commits, refs] = await Promise.all([loadCommits(cwd, logOptions(revs, maxCount)), loadRefs(cwd)]);
+    // Both loads need the stash list and HEAD: ask git once.
+    const [stashes, head] = await Promise.all([loadStashes(cwd), headHash(cwd)]);
+    const [commits, refs] = await Promise.all([
+      loadCommits(cwd, {...logOptions(revs, maxCount), known: {stashes, head}}),
+      loadRefs(cwd, {stashes, head}),
+    ]);
     return {rows: layoutGraph(commits), refs};
   };
 

@@ -1,7 +1,7 @@
 import type {Ref, RefKind} from '../graph/types.js';
 import {git} from './exec.js';
 import {operationInProgress, type Operation} from './operation.js';
-import {loadStashes} from './stash.js';
+import {loadStashes, type StashEntry} from './stash.js';
 
 /** How the current branch compares with the branch it tracks. */
 export interface Upstream {
@@ -74,29 +74,48 @@ function toRef(fullName: string): Ref | null {
   return null;
 }
 
-export async function loadRefs(cwd: string): Promise<RefInfo> {
-  const byCommit = parseRefs(
-    await git(['for-each-ref', `--format=${FORMAT}`], cwd),
+/** The commit HEAD points at, or null in a repository without commits. */
+export const headHash = (cwd: string): Promise<string | null> =>
+  git(['rev-parse', '--verify', '-q', 'HEAD'], cwd).then(
+    out => out.trim(),
+    () => null,
   );
-  const hash = await git(['rev-parse', '--verify', '-q', 'HEAD'], cwd)
-    .then(out => out.trim())
-    .catch(() => null);
-  const branch = await git(['symbolic-ref', '--short', '-q', 'HEAD'], cwd)
-    .then(out => out.trim())
-    .catch(() => null);
+
+/** What a caller that also loads the commits can hand over, so the same git command is not run twice. */
+export interface Prefetched {
+  stashes?: StashEntry[];
+  head?: string | null;
+}
+
+export async function loadRefs(cwd: string, known: Prefetched = {}): Promise<RefInfo> {
+  // Independent questions to git: asked together, since the cost of a reload is mostly starting processes.
+  const [refList, hash, branch, stashes, upstream, operation, remotes] = await Promise.all([
+    git(['for-each-ref', `--format=${FORMAT}`], cwd),
+    known.head !== undefined ? known.head : headHash(cwd),
+    git(['symbolic-ref', '--short', '-q', 'HEAD'], cwd).then(
+      out => out.trim(),
+      () => null,
+    ),
+    known.stashes ?? loadStashes(cwd),
+    // A detached HEAD has no upstream: the command fails and there is none.
+    loadUpstream(cwd),
+    operationInProgress(cwd),
+    git(['remote'], cwd).then(
+      out => out.split('\n').filter(name => name !== ''),
+      () => [],
+    ),
+  ]);
+  const byCommit = parseRefs(refList);
   // Stashes are not under refs/ with a usable name; each entry gets `stash@{n}`.
-  for (const {hash: stashHash, name} of await loadStashes(cwd)) {
+  for (const {hash: stashHash, name} of stashes) {
     const list = byCommit.get(stashHash) ?? [];
     list.push({name, kind: 'stash'});
     byCommit.set(stashHash, list);
   }
-  const upstream = branch === null ? undefined : await loadUpstream(cwd);
-  const operation = await operationInProgress(cwd);
-  const remotes = (await git(['remote'], cwd).catch(() => '')).split('\n').filter(name => name !== '');
   return {
     byCommit,
     remotes,
-    head: {hash, branch, merging: operation === 'merge', ...(operation && {operation}), ...(upstream && {upstream})},
+    head: {hash, branch, merging: operation === 'merge', ...(operation && {operation}), ...(branch !== null && upstream && {upstream})},
   };
 }
 
@@ -106,9 +125,12 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
  */
 async function loadUpstream(cwd: string): Promise<Upstream | undefined> {
   try {
-    const name = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], cwd)).trim();
-    const counts = parseAheadBehind(await git(['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], cwd));
-    return counts ? {name, ...counts} : undefined;
+    const [name, counts] = await Promise.all([
+      git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], cwd),
+      git(['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], cwd),
+    ]);
+    const parsed = parseAheadBehind(counts);
+    return parsed ? {name: name.trim(), ...parsed} : undefined;
   } catch {
     return undefined;
   }

@@ -1,5 +1,5 @@
 import {existsSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {join} from 'node:path';
 import {git} from './exec.js';
 import {conflictedFiles} from './merge.js';
 
@@ -9,33 +9,24 @@ export type Operation = 'merge' | 'cherry-pick' | 'revert' | 'rebase';
 /** Operations that can skip the step they stopped on. */
 export const canSkip = (op: Operation) => op !== 'merge';
 
-/** True if `git rev-parse --verify` finds this state ref (MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD). */
-const hasRef = (cwd: string, name: string) =>
-  git(['rev-parse', '-q', '--verify', name], cwd).then(
-    () => true,
-    () => false,
-  );
-
-/** `rebase-merge/` and `rebase-apply/` are directories in the git dir (which differs in a linked worktree). */
-async function hasGitDirPath(cwd: string, name: string): Promise<boolean> {
-  try {
-    const path = (await git(['rev-parse', '--git-path', name], cwd)).trim();
-    return existsSync(resolve(cwd, path));
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Which operation is stopped in this repository, if any. A rebase also leaves
- * CHERRY_PICK_HEAD or MERGE_HEAD while it is stopped on a commit, so it is
- * checked first.
+ * Which operation is stopped in this repository, if any. Each one leaves a marker in the git
+ * directory (which is the worktree's own in a linked worktree): a rebase a directory, the others a
+ * file. A rebase also leaves CHERRY_PICK_HEAD or MERGE_HEAD while it is stopped on a commit, so it
+ * is checked first. One git call finds the directory; the rest are file checks.
  */
 export async function operationInProgress(cwd: string): Promise<Operation | null> {
-  if ((await hasGitDirPath(cwd, 'rebase-merge')) || (await hasGitDirPath(cwd, 'rebase-apply'))) return 'rebase';
-  if (await hasRef(cwd, 'CHERRY_PICK_HEAD')) return 'cherry-pick';
-  if (await hasRef(cwd, 'REVERT_HEAD')) return 'revert';
-  if (await hasRef(cwd, 'MERGE_HEAD')) return 'merge';
+  let gitDir: string;
+  try {
+    gitDir = (await git(['rev-parse', '--absolute-git-dir'], cwd)).trim();
+  } catch {
+    return null;
+  }
+  const has = (name: string) => existsSync(join(gitDir, name));
+  if (has('rebase-merge') || has('rebase-apply')) return 'rebase';
+  if (has('CHERRY_PICK_HEAD')) return 'cherry-pick';
+  if (has('REVERT_HEAD')) return 'revert';
+  if (has('MERGE_HEAD')) return 'merge';
   return null;
 }
 

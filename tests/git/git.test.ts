@@ -2,7 +2,8 @@ import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {loadCommits} from '../../src/git/log.js';
-import {loadRefs, localBranchTips} from '../../src/git/refs.js';
+import {headHash, loadRefs, localBranchTips} from '../../src/git/refs.js';
+import {loadStashes} from '../../src/git/stash.js';
 import {createRepo} from './helpers.js';
 
 const cleanups: (() => void)[] = [];
@@ -21,6 +22,19 @@ describe('repositório vazio', () => {
     const refs = await loadRefs(dir);
     expect(refs.head).toEqual({hash: null, branch: 'main', merging: false});
     expect(refs.byCommit.size).toBe(0);
+  });
+});
+
+describe('loadRefs with state the caller already has', () => {
+  it('gives the same result as asking git itself', async () => {
+    const {dir, run} = repo();
+    run('commit', '--allow-empty', '-q', '-m', 'base');
+    writeFileSync(join(dir, 'f.txt'), 'x');
+    run('add', 'f.txt');
+    run('stash', 'push', '-q');
+    const known = {stashes: await loadStashes(dir), head: await headHash(dir)};
+    expect(known.stashes).toHaveLength(1);
+    expect(await loadRefs(dir, known)).toEqual(await loadRefs(dir));
   });
 });
 

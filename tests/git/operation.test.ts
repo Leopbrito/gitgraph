@@ -1,4 +1,6 @@
-import {writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {canSkip, gitOperationActions, operationInProgress} from '../../src/git/operation.js';
@@ -43,6 +45,18 @@ describe('operationInProgress', () => {
     const {dir} = repo();
     expect(await operationInProgress(dir)).toBeNull();
     expect((await loadRefs(dir)).head.operation).toBeUndefined();
+  });
+
+  it('looks in the worktree\'s own git directory, not the main one', async () => {
+    const r = repo();
+    const parent = mkdtempSync(join(tmpdir(), 'gitgraph-wt-'));
+    cleanups.push(() => rmSync(parent, {recursive: true, force: true}));
+    const linked = join(parent, 'linked');
+    r.run('worktree', 'add', '-q', '-b', 'wt', linked, 'main');
+    const env = {...process.env, GIT_AUTHOR_NAME: 'Ana', GIT_AUTHOR_EMAIL: 'a@x', GIT_COMMITTER_NAME: 'Ana', GIT_COMMITTER_EMAIL: 'a@x'};
+    expect(() => execFileSync('git', ['cherry-pick', r.featHash], {cwd: linked, env, stdio: 'pipe'})).toThrow();
+    expect(await operationInProgress(linked)).toBe('cherry-pick');
+    expect(await operationInProgress(r.dir)).toBeNull();
   });
 
   it('sees a cherry-pick, a revert, a merge and a rebase stopped on conflicts', async () => {

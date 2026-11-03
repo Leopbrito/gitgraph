@@ -1,7 +1,7 @@
 import type {Commit} from '../graph/types.js';
 import {git, gitStream} from './exec.js';
 import {LOG_FIELDS, parseLog} from './parse.js';
-import {loadStashes} from './stash.js';
+import {loadStashes, type StashEntry} from './stash.js';
 import {loadWorkingTree, uncommittedNode} from './status.js';
 
 // hash, parents, author, email, date, subject, body. Used with `git log -z`, so every
@@ -72,6 +72,8 @@ export interface LogOptions extends LogFilters {
    * there are changes and HEAD is in the list.
    */
   uncommitted?: boolean;
+  /** The stash list and HEAD, when the caller has already asked git (so it is not asked again). */
+  known?: {stashes?: StashEntry[]; head?: string | null};
 }
 
 /** The arguments of `git log` for these options. */
@@ -129,14 +131,14 @@ export async function* streamCommits(
   cwd: string,
   options: LogOptions = {},
 ): AsyncGenerator<Commit, void, undefined> {
-  const {stashes = false, uncommitted = false, author, since, until, firstParent} = options;
+  const {stashes = false, uncommitted = false, author, since, until, firstParent, known} = options;
   const needsAll = author !== undefined || since !== undefined || until !== undefined;
   let source: AsyncIterable<Commit> = streamLog(logArgs(options), cwd);
   if (firstParent) source = mapParents(source, parents => parents.slice(0, 1));
   if (needsAll) source = buffered(source);
 
-  const stashed = stashes ? await stashNodes(cwd) : new Map<string, Commit[]>();
-  const working = uncommitted ? await workingNode(cwd) : undefined;
+  const stashed = stashes ? await stashNodes(cwd, known?.stashes) : new Map<string, Commit[]>();
+  const working = uncommitted ? await workingNode(cwd, known?.head) : undefined;
   try {
     for await (const commit of source) {
       // Above the commit they belong to: the changes first, then the stashes (newest first).
@@ -180,9 +182,10 @@ async function* buffered(source: AsyncIterable<Commit>) {
  * when HEAD is not the newest commit). Failing to read the status must not hide
  * the history.
  */
-async function workingNode(cwd: string): Promise<Commit | undefined> {
+async function workingNode(cwd: string, known?: string | null): Promise<Commit | undefined> {
   try {
-    const head = (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd)).trim();
+    const head = known !== undefined ? known : (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], cwd)).trim();
+    if (!head) return undefined;
     const tree = await loadWorkingTree(cwd);
     return tree ? uncommittedNode(tree, head) : undefined;
   } catch {
@@ -201,10 +204,10 @@ async function workingNode(cwd: string): Promise<Commit | undefined> {
  * Several stashes on one base stay newest first. A stash whose base never shows
  * up in the list is left out.
  */
-async function stashNodes(cwd: string): Promise<Map<string, Commit[]>> {
+async function stashNodes(cwd: string, known?: StashEntry[]): Promise<Map<string, Commit[]>> {
   const byBase = new Map<string, Commit[]>();
   try {
-    const entries = await loadStashes(cwd);
+    const entries = known ?? (await loadStashes(cwd));
     if (entries.length === 0) return byBase;
     const read = parseLog(
       await git(
