@@ -768,6 +768,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   if (viewing && commit) {
     return (
       <CommitView
+        // A new commit (the old one vanished in a reload) starts from scratch: files, selection and scroll.
+        key={commit.hash}
         commit={commit}
         refs={refsOf(commit.hash)}
         head={headOf(commit.hash)}

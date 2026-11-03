@@ -989,6 +989,35 @@ describe('Browser', () => {
       return {...rendered, changes};
     };
 
+    it('starts over when a reload moves the open view to another commit', async () => {
+      // h000001 vanishes (rewritten history): the view follows to its parent, whose files never arrive.
+      const after: GraphData = {rows: layoutGraph([commit(0, ['h000002']), ...linear(5).slice(2)]), refs};
+      let notify = () => {};
+      const watch = {
+        subscribe: (listener: () => void) => {
+          notify = listener;
+          return () => {};
+        },
+      };
+      const changes: ChangesActions = {
+        ...noChanges,
+        files: vi.fn((c: Commit) => (c.hash === 'h000001' ? Promise.resolve(files) : new Promise<ChangedFile[]>(() => {}))),
+      };
+      const load = vi.fn<LoadGraph>().mockResolvedValue(after);
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={load} changes={changes} watch={watch} />,
+      );
+      await press(stdin, 'j', '\r');
+      await tick();
+      expect(lastFrame()).toContain('src/a.ts');
+      notify();
+      await tick();
+      await tick();
+      expect(lastFrame()).toContain('h000002');
+      expect(lastFrame()).toContain('carregando');
+      expect(lastFrame()).not.toContain('src/a.ts');
+    });
+
     it('abre com Enter e lista os arquivos com status e contagem', async () => {
       const {lastFrame, changes} = await open();
       const frame = lastFrame() ?? '';
