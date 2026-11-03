@@ -37,6 +37,18 @@ describe('enableTerminalMouse', () => {
     mouse.dispose();
   });
 
+  it('joins a report that arrives in two chunks', async () => {
+    const {stdin, mouse, events} = setup();
+    stdin.write('a\u001B[<65;10');
+    await readable(stdin);
+    expect(stdin.read()).toBe('a');
+    stdin.write(';5Mb');
+    await readable(stdin);
+    expect(stdin.read()).toBe('b');
+    expect(events).toEqual([{type: 'wheelDown', row: 4, col: 9}]);
+    mouse.dispose();
+  });
+
   it('skips chunks made only of mouse reports', async () => {
     const {stdin, mouse, events} = setup();
     stdin.write('\u001B[<65;1;1M');

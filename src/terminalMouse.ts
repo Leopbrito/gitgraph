@@ -1,4 +1,4 @@
-import {parseMouse, type MouseListener, type MouseSource} from './ui/mouse.js';
+import {splitMouse, type MouseListener, type MouseSource} from './ui/mouse.js';
 
 // 1000 = report button presses and the wheel, 1006 = SGR encoding (no 223-column limit).
 const ENABLE = '\u001B[?1000h\u001B[?1006h';
@@ -19,12 +19,15 @@ export interface TerminalMouse {
 export function enableTerminalMouse(stdin: NodeJS.ReadStream, stdout: NodeJS.WriteStream): TerminalMouse {
   const listeners = new Set<MouseListener>();
   const original = stdin.read;
+  // The start of a report that arrived cut in two; completed by the next chunk.
+  let pending = '';
 
   stdin.read = function (this: NodeJS.ReadStream, ...args: Parameters<typeof original>) {
     for (;;) {
       const chunk: unknown = original.apply(this, args);
       if (chunk === null || chunk === undefined) return chunk;
-      const {events, rest} = parseMouse(String(chunk));
+      const {events, rest, pending: unfinished} = splitMouse(pending, String(chunk));
+      pending = unfinished;
       for (const event of events) for (const listener of [...listeners]) listener(event);
       // A chunk with nothing but mouse reports would reach Ink as empty input: read on.
       if (rest !== '') return rest;

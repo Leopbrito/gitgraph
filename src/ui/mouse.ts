@@ -41,3 +41,20 @@ export function parseMouse(data: string): {events: MouseEvent[]; rest: string} {
   });
   return {events, rest};
 }
+
+// The start of a report cut off before its final byte. Only `ESC [ <` is held back: a bare
+// `ESC` (or `ESC [`) at the end of a chunk is more likely the Esc key than a split report.
+// eslint-disable-next-line no-control-regex, regexp/no-control-character -- SGR mouse reports start with ESC.
+const INCOMPLETE = /\u{1B}\[<[\d;]{0,16}$/u;
+
+/**
+ * Like `parseMouse`, for a stream: a report may arrive split across two chunks
+ * (common when scrolling fast over ssh). The unfinished tail is returned as
+ * `pending` to be passed back in with the next chunk, so its halves are never
+ * handed to the keyboard handling as typed text.
+ */
+export function splitMouse(pending: string, data: string): {events: MouseEvent[]; rest: string; pending: string} {
+  const {events, rest} = parseMouse(pending + data);
+  const cut = INCOMPLETE.exec(rest);
+  return cut ? {events, rest: rest.slice(0, cut.index), pending: cut[0]} : {events, rest, pending: ''};
+}
