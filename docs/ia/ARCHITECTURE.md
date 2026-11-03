@@ -40,6 +40,7 @@ src/
     parse.ts       # parseLog(): texto -> Commit[] (puro)
     watch.ts       # watchRepository(): fs.watch em HEAD/index/packed-refs/refs com debounce; ChangeSource
     status.ts      # parseStatus()/describeWorkingTree() (puros), loadWorkingTree() via `git status --porcelain=v2`, uncommittedNode()
+    fetch.ts       # fetchAll(): `git fetch --all --prune` com `network: true`; traduz falha de autenticação
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
@@ -118,6 +119,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 `s` abre o campo de busca; `n`/`N` andam pelos resultados; `/` continua sendo o filtro de branch (decisão: manter o mapa de teclas existente e acrescentar `s`, em vez de seguir o `/` do tig e mover o filtro para outra tecla). A busca é **em memória**, nos commits carregados (`findMatches`: substring sem diferenciar maiúsculas em hash, assunto, corpo, autor e e-mail); ela não chama o git. Isso evita uma segunda fonte de verdade para a lista, mas não acha commits ainda não carregados: a carga sob demanda só cresce quando o cursor chega perto do fim. Buscar no histórico não carregado (`git log --grep`/`--author` e saltar até o resultado) fica como evolução.
 
 Estado no `Browser`: `query` (a busca ativa, que alimenta `matches` por `useMemo` e, portanto, sobrevive a recargas e a trocas de filtro de branch) e `typing` (o campo aberto, com `origin`, a posição do cursor ao abrir, e `previous`, a busca anterior). A cada tecla a busca é refeita e o cursor vai para o primeiro resultado a partir de `origin` (`firstFrom`, com volta ao início), então apagar letras volta o cursor. `Esc` no campo restaura `previous` e o cursor; `Enter` fecha o campo mantendo a busca (sem resultados, avisa e a descarta). Fora do campo, `Esc` limpa a busca e `n`/`N` usam `nextMatch` (com volta). Com o campo aberto o `useInput` consome todas as teclas, então `q`, `j` etc. entram no texto; o mouse também é ignorado. O resultado aparece no cabeçalho (`busca "x" 3/12`) e nas linhas: assunto em amarelo/negrito e `*` no lugar do marcador (o `--no-color` do Ink desliga todo estilo, então a cor sozinha não bastaria).
+
+### Upstream e fetch (`f`)
+
+`loadRefs` lê, para a branch atual (nunca com HEAD destacado), `rev-parse --abbrev-ref @{upstream}` e `rev-list --left-right --count HEAD...@{upstream}` (`parseAheadBehind`), e põe `head.upstream = {name, ahead, behind}`. Sem upstream, ou com o upstream apagado na remota (o `rev-list` falha), fica `undefined` e o cabeçalho não mostra nada; `headLabel` mostra só os lados diferentes de zero (`↑2 ↓3`, `^2 v3` em ASCII). As contagens vêm das refs remotas **locais**, sem rede: o que as atualiza é o fetch. As refs são relidas a cada carga, então checkout, merge e `r` já as refrescam.
+
+`f` roda `fetchAll` (`git fetch --all --prune` com `{network: true}`: sem prompts, sem terminal de controle, limite de 2 min), injetado como `Browser.fetch`. Enquanto roda, `fetching` mostra `buscando remotas…` no cabeçalho e um segundo `f` só avisa; a lista continua navegável. Se dá certo, faz `reload(..., {follow: true, notice})`; se falha, mostra o motivo numa linha (`summarizeGitError`, que tira o resumo do fetch e as dicas) e **não recarrega**. Erros de autenticação ganham a explicação de que as credenciais precisam estar disponíveis sem prompt. `--prune` apaga as refs remotas que sumiram na origem, e é por isso que ele também move o grafo.
 
 ### Alterações não commitadas
 

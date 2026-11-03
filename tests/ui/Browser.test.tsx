@@ -1144,6 +1144,54 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('fetch (f) and upstream', () => {
+    it('shows how far the current branch is from its upstream', () => {
+      const upstreamRefs: RefInfo = {...refs, head: {...refs.head, upstream: {name: 'origin/main', ahead: 2, behind: 3}}};
+      const {lastFrame} = render(
+        <Browser initial={{rows: layoutGraph(linear(3)), refs: upstreamRefs}} initialLimit={100} load={vi.fn<LoadGraph>()} />,
+      );
+      expect(lastFrame()).toContain('atual: main ↑2 ↓3');
+    });
+
+    it('f fetches in the background, shows progress and reloads when done', async () => {
+      let finish = () => {};
+      const fetch = vi.fn(() => new Promise<void>(resolve => (finish = resolve)));
+      const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} fetch={fetch} />);
+      await press(stdin, 'f');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('buscando remotas');
+      // A second f while fetching does not start another one.
+      await press(stdin, 'f');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain('já estou buscando');
+      expect(load).not.toHaveBeenCalled();
+      finish();
+      await tick();
+      await tick();
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).not.toContain('buscando remotas');
+      expect(lastFrame()).toContain('remotas atualizadas');
+    });
+
+    it('shows the reason in the footer when the fetch fails and does not reload', async () => {
+      const fetch = vi.fn().mockRejectedValue(new Error('fatal: unable to access remote'));
+      const load = vi.fn<LoadGraph>();
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} fetch={fetch} />);
+      await press(stdin, 'f');
+      await tick();
+      expect(lastFrame()).toContain('erro: unable to access remote');
+      expect(lastFrame()).not.toContain('buscando remotas');
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it('says so when there is no way to fetch', async () => {
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, 'f');
+      expect(lastFrame()).toContain('fetch indisponível');
+    });
+  });
+
   describe('uncommitted changes node', () => {
     const withNode = (): GraphData => {
       const real = linear(3);

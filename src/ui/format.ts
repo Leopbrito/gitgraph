@@ -37,8 +37,18 @@ export function formatRefs(refs: Ref[], head: HeadInfo): Label[] {
   return labels;
 }
 
-/** Where HEAD is, for the header: the branch, or the commit when detached. */
-export function headLabel(head: {hash: string | null; branch: string | null; merging?: boolean}): string {
+/**
+ * Where HEAD is, for the header: the branch (or the commit when detached), how far it is
+ * from its upstream (`↑2 ↓3`; `^2 v3` in ASCII) and whether a merge is in progress.
+ */
+export function headLabel(
+  head: {hash: string | null; branch: string | null; merging?: boolean; upstream?: {ahead: number; behind: number}},
+  {ascii = false}: {ascii?: boolean} = {},
+): string {
   const where = head.branch ?? (head.hash ? `HEAD destacado em ${head.hash.slice(0, 7)}` : 'sem commits');
-  return head.merging ? `${where} (merge em andamento)` : where;
+  const {ahead = 0, behind = 0} = head.upstream ?? {};
+  const [up, down] = ascii ? ['^', 'v'] : ['↑', '↓'];
+  const distance = [ahead > 0 && `${up}${ahead}`, behind > 0 && `${down}${behind}`].filter(Boolean).join(' ');
+  const label = distance === '' ? where : `${where} ${distance}`;
+  return head.merging ? `${label} (merge em andamento)` : label;
 }

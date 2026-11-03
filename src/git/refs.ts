@@ -3,6 +3,22 @@ import {git} from './exec.js';
 import {mergeInProgress} from './merge.js';
 import {loadStashes} from './stash.js';
 
+/** How the current branch compares with the branch it tracks. */
+export interface Upstream {
+  /** The tracked branch, e.g. `origin/main`. */
+  name: string;
+  /** Commits on HEAD that the upstream does not have. */
+  ahead: number;
+  /** Commits on the upstream that HEAD does not have. */
+  behind: number;
+}
+
+/** Reads `git rev-list --left-right --count HEAD...@{upstream}` ("2\t3"). */
+export function parseAheadBehind(text: string): {ahead: number; behind: number} | null {
+  const match = /^(\d+)\s+(\d+)$/.exec(text.trim());
+  return match ? {ahead: Number(match[1]), behind: Number(match[2])} : null;
+}
+
 export interface RefInfo {
   /** Refs agrupadas pelo hash do commit apontado. */
   byCommit: Map<string, Ref[]>;
@@ -10,7 +26,7 @@ export interface RefInfo {
    * HEAD's commit (null in a repository without commits), the current branch
    * (null when detached) and whether a merge is in progress.
    */
-  head: {hash: string | null; branch: string | null; merging?: boolean};
+  head: {hash: string | null; branch: string | null; merging?: boolean; upstream?: Upstream};
 }
 
 const FORMAT = '%(objectname)%00%(*objectname)%00%(refname)';
@@ -65,7 +81,22 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
     list.push({name, kind: 'stash'});
     byCommit.set(stashHash, list);
   }
-  return {byCommit, head: {hash, branch, merging: await mergeInProgress(cwd)}};
+  const upstream = branch === null ? undefined : await loadUpstream(cwd);
+  return {byCommit, head: {hash, branch, merging: await mergeInProgress(cwd), ...(upstream && {upstream})}};
+}
+
+/**
+ * The tracked branch and how far apart the two are. A branch with no upstream,
+ * or whose upstream was deleted on the remote, simply has none.
+ */
+async function loadUpstream(cwd: string): Promise<Upstream | undefined> {
+  try {
+    const name = (await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], cwd)).trim();
+    const counts = parseAheadBehind(await git(['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], cwd));
+    return counts ? {name, ...counts} : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Tip commit of each local branch, from the refs grouped by commit. */

@@ -67,3 +67,19 @@ describe('headLabel', () => {
     expect(headLabel({hash: 'abc', branch: 'main', merging: false})).toBe('main');
   });
 });
+
+describe('headLabel upstream', () => {
+  it('shows commits ahead and behind, only the non-zero ones', () => {
+    expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 2, behind: 3}})).toBe('main ↑2 ↓3');
+    expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 2, behind: 0}})).toBe('main ↑2');
+    expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 0, behind: 1}})).toBe('main ↓1');
+    expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 0, behind: 0}})).toBe('main');
+  });
+
+  it('uses ASCII arrows when asked and keeps the merge note last', () => {
+    expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 2, behind: 3}}, {ascii: true})).toBe('main ^2 v3');
+    expect(headLabel({hash: 'abc', branch: 'main', merging: true, upstream: {ahead: 1, behind: 0}})).toBe(
+      'main ↑1 (merge em andamento)',
+    );
+  });
+});

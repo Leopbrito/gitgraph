@@ -68,6 +68,8 @@ interface Props {
   watch?: ChangeSource;
   /** Puts text on the clipboard (key y); without it the hash is only shown. */
   copy?: (text: string) => Promise<CopyMethod>;
+  /** Fetches the remotes (key f); rejects with a one-line reason. */
+  fetch?: () => Promise<void>;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -84,7 +86,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse, watch, copy, fetch}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -102,6 +104,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   // A merge in progress: 0 = abort it, 1 = leave it for the terminal.
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
+  const [fetching, setFetching] = useState(false);
   // Active search (highlight, n/N); `typing` is set while the input is open.
   const [query, setQuery] = useState('');
   const [typing, setTyping] = useState<{origin: number; previous: string} | null>(null);
@@ -412,6 +415,23 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           .catch(() => setNotice(`não foi possível copiar; hash: ${hash}`));
       }
     }
+    else if (input === 'f') {
+      if (!fetch) setNotice('fetch indisponível');
+      else if (fetching) setNotice('já estou buscando as remotas');
+      else {
+        setFetching(true);
+        fetch()
+          .then(() => {
+            setFetching(false);
+            reload(revs, limit, false, {follow: true, notice: 'remotas atualizadas'});
+          })
+          // After reload() would clear it; here nothing reloads, so set it directly.
+          .catch(e => {
+            setFetching(false);
+            setError(failure(e));
+          });
+      }
+    }
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
@@ -503,7 +523,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         <Text bold>gitgraph</Text>
         <Text dimColor>{` ${dot} atual: `}</Text>
         <Text bold color={tint(display, data.refs.head.merging ? 'yellow' : 'cyan')}>
-          {headLabel(data.refs.head)}
+          {headLabel(data.refs.head, {ascii: display.ascii})}
         </Text>
         {query !== '' && (
           <Text bold color={tint(display, 'yellow')}>
@@ -516,7 +536,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
           </Text>
         )}
         <Text dimColor>
-          {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}`}
+          {` ${dot} ${filterLabel} ${dot} ${total === 0 ? 0 : cursor.selected + 1}/${total}${more ? '+' : ''}${loading ? ` ${dot} carregando${display.ascii ? '...' : '…'}` : ''}${fetching ? ` ${dot} buscando remotas${display.ascii ? '...' : '…'}` : ''}`}
         </Text>
       </Text>
       <Box flexDirection="column" height={listHeight} overflow="hidden">
