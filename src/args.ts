@@ -1,5 +1,5 @@
 import {parseArgs} from 'node:util';
-import {COMMIT_ORDERS, type CommitOrder} from './git/log.js';
+import {COMMIT_ORDERS, type CommitOrder, type LogFilters} from './git/log.js';
 
 export interface CliOptions {
   /** Limite de commits; sem ele a TUI carrega sob demanda e o pipe imprime tudo. */
@@ -12,6 +12,8 @@ export interface CliOptions {
   order: CommitOrder;
   /** Show the stash entries in the graph. */
   stash: boolean;
+  /** Filters on the history (author, dates, first parent, hidden refs). */
+  filters: LogFilters;
   /** Revisions to start from (branches, tags, hashes, ranges); empty means all refs. */
   revs: string[];
   /** Paths that limit the history (everything after `--`). */
@@ -37,6 +39,12 @@ a commits que mexeram nos caminhos.
 
 Opções:
   -C <caminho>         abre o repositório de outro diretório, sem precisar de cd
+      --author <padrão>  só commits cujo autor casa com o padrão (regex, como no git log)
+      --since <data>   só commits depois da data ("2 weeks ago", 2026-01-31)
+      --until <data>   só commits até a data
+      --first-parent   segue só o primeiro pai de cada merge
+      --no-remotes     esconde as branches remotas
+      --no-tags        esconde as tags
   -n, --max-count <n>  mostra no máximo n commits (padrão: sem limite)
       --no-color       desliga as cores (também vale a variável NO_COLOR)
       --ascii          usa só caracteres ASCII no grafo
@@ -63,6 +71,12 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
       allowPositionals: true,
       options: {
         directory: {type: 'string', short: 'C'},
+        author: {type: 'string'},
+        since: {type: 'string'},
+        until: {type: 'string'},
+        'first-parent': {type: 'boolean'},
+        'no-remotes': {type: 'boolean'},
+        'no-tags': {type: 'boolean'},
         'max-count': {type: 'string', short: 'n'},
         'no-color': {type: 'boolean'},
         ascii: {type: 'boolean'},
@@ -95,6 +109,14 @@ export function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOp
     compact: values.compact ?? false,
     order,
     stash: !values['no-stash'],
+    filters: {
+      ...(values.author !== undefined && {author: values.author}),
+      ...(values.since !== undefined && {since: values.since}),
+      ...(values.until !== undefined && {until: values.until}),
+      ...(values['first-parent'] && {firstParent: true}),
+      ...(values['no-remotes'] && {hideRemotes: true}),
+      ...(values['no-tags'] && {hideTags: true}),
+    },
     revs: positionals,
     paths,
     directory: values.directory,

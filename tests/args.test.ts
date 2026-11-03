@@ -10,6 +10,7 @@ describe('parseCliArgs', () => {
       compact: false,
       order: 'date',
       stash: true,
+      filters: {},
       revs: [],
       paths: [],
       directory: undefined,
@@ -110,5 +111,28 @@ describe('revisões, caminhos e -C', () => {
 
   it('rejeita -C sem valor', () => {
     expect(() => parseCliArgs(['-C'])).toThrow(UsageError);
+  });
+});
+
+describe('filtros do log', () => {
+  it('lê cada filtro', () => {
+    expect(
+      parseCliArgs(['--author', 'Ana', '--since=2 weeks ago', '--until', '2026-02-01', '--first-parent', '--no-remotes', '--no-tags']).filters,
+    ).toEqual({
+      author: 'Ana',
+      since: '2 weeks ago',
+      until: '2026-02-01',
+      firstParent: true,
+      hideRemotes: true,
+      hideTags: true,
+    });
+  });
+
+  it('não define o que não foi pedido', () => {
+    expect(parseCliArgs(['--no-tags']).filters).toEqual({hideTags: true});
+  });
+
+  it('rejeita --author sem valor', () => {
+    expect(() => parseCliArgs(['--author'])).toThrow(UsageError);
   });
 });

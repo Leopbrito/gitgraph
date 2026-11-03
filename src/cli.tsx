@@ -8,7 +8,7 @@ import {HELP, parseCliArgs, UsageError} from './args.js';
 import {gitChanges} from './git/changes.js';
 import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
-import {loadCommits} from './git/log.js';
+import {describeFilters, loadCommits} from './git/log.js';
 import {loadRefs} from './git/refs.js';
 import {verifyRevisions} from './git/revs.js';
 import {enableTerminalMouse} from './terminalMouse.js';
@@ -43,8 +43,8 @@ async function main() {
       loadCommits(
         cwd,
         revs.length === 0
-          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash}
-          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash},
+          ? {all: true, maxCount, paths: options.paths, order: options.order, stashes: options.stash, ...options.filters}
+          : {revs, maxCount, paths: options.paths, order: options.order, stashes: options.stash, ...options.filters},
       ),
       loadRefs(cwd),
     ]);
@@ -78,6 +78,7 @@ async function main() {
           initial={initial}
           initialLimit={initialLimit}
           initialRevs={options.revs}
+          filters={[...describeFilters(options.filters), ...(options.paths.length > 0 ? [`caminhos ${options.paths.join(' ')}`] : [])]}
           maxCommits={options.maxCount}
           load={load}
           checkout={target => checkout(cwd, target)}

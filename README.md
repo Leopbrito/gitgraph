@@ -37,6 +37,10 @@ gitgraph [opções] [<revisão>...] [-- <caminho>...]
 
 | Opção | Efeito |
 | --- | --- |
+| `--author <padrão>` | Só commits cujo autor casa com o padrão (expressão regular, como no `git log --author`). |
+| `--since <data>`, `--until <data>` | Só commits depois / até a data (`"2 weeks ago"`, `2026-01-31`; o git ignora datas no futuro). |
+| `--first-parent` | Segue só o primeiro pai de cada merge: mostra a história da branch principal sem os commits que entraram por merge. |
+| `--no-remotes`, `--no-tags` | Escondem as branches remotas / as tags da listagem de "todas as refs" (não valem com revisões explícitas). |
 | `-C <caminho>` | Abre o repositório de outro diretório, sem precisar de `cd` (como `git -C`). |
 | `-n`, `--max-count <n>` | Mostra no máximo `n` commits. Sem ela, a interface carrega 500 e busca mais conforme você desce, e a saída por pipe imprime tudo. |
 | `--no-color` | Desliga as cores (também vale a variável `NO_COLOR`). |
@@ -48,7 +52,7 @@ gitgraph [opções] [<revisão>...] [-- <caminho>...]
 | `-h`, `--help` | Mostra a ajuda. |
 | `-v`, `--version` | Mostra a versão. |
 
-**Revisões e caminhos.** Sem argumentos, mostra todas as branches locais e remotas e as tags. Com revisões (`gitgraph main feature-x`, `gitgraph v1.0..main`, um hash), mostra só o que é alcançável delas; na interface, elas viram o filtro de branch inicial (`/` muda). Depois de `--`, limita o histórico aos commits que mexeram nos caminhos (`gitgraph -- src/`), com o grafo religado entre os commits que sobram. Uma revisão inexistente é erro (`revisão desconhecida: x`); `--` separa revisões de caminhos quando o nome é ambíguo. Vale também na saída por pipe.
+**Revisões e caminhos.** Sem argumentos, mostra todas as branches locais e remotas e as tags. Com revisões (`gitgraph main feature-x`, `gitgraph v1.0..main`, um hash), mostra só o que é alcançável delas; na interface, elas viram o filtro de branch inicial (`/` muda). Depois de `--`, limita o histórico aos commits que mexeram nos caminhos (`gitgraph -- src/`), com o grafo religado entre os commits que sobram. Os filtros acima se combinam entre si, valem na interface e no pipe e aparecem em magenta no cabeçalho (`autor Ana, sem tags`). Com `--author`/`--since`/`--until` os commits que sobram ficam sem ligação com os escondidos: o grafo mostra só as ligações entre eles. Uma revisão inexistente é erro (`revisão desconhecida: x`); `--` separa revisões de caminhos quando o nome é ambíguo. Vale também na saída por pipe.
 
 Mostra todas as branches locais e remotas e as tags. Cada **stash** aparece como um nó oco (`○`, `o` com `--ascii`) com o rótulo `(stash@{0})`, logo acima do commit em que foi feito; os commits internos que o git cria para o stash (índice e arquivos não rastreados) ficam escondidos. Um stash só aparece se o commit-base estiver na lista (por exemplo, `-n` pode cortá-lo, e um filtro de branch que não inclua o commit-base também). Use `--no-stash` para não mostrá-los.
 

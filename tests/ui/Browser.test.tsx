@@ -1129,6 +1129,21 @@ describe('Browser', () => {
     });
   });
 
+  it('shows the active log filters in the header', () => {
+    const {lastFrame} = render(
+      <Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} filters={['autor Ana', 'sem tags']} />,
+    );
+    expect(lastFrame()).toContain('autor Ana, sem tags');
+  });
+
+  it('starts filtered by the revisions given on the command line', () => {
+    const {lastFrame} = render(
+      <Browser initial={data(3)} initialLimit={100} initialRevs={['main', 'feature']} load={vi.fn<LoadGraph>()} />,
+    );
+    expect(lastFrame()).toContain('main, feature');
+    expect(lastFrame()).not.toContain('todas as branches');
+  });
+
   describe('search', () => {
     // Subjects (index): 0 fix login, 1 add search, 2 fix cache, 3 docs, 4 fix typo.
     const subjects = ['fix login', 'add search', 'fix cache', 'docs', 'fix typo'];

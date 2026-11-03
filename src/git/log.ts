@@ -25,7 +25,33 @@ const ORDER_FLAGS: Record<CommitOrder, string> = {
   topo: '--topo-order',
 };
 
-export interface LogOptions {
+/** Filters equivalent to the `git log` ones; all optional. */
+export interface LogFilters {
+  /** `--author=<pattern>` (a regular expression, as in git). */
+  author?: string;
+  /** `--since` / `--until`: any date git understands ("2 weeks ago", "2026-01-31"). */
+  since?: string;
+  until?: string;
+  /** Follow only the first parent of each merge. */
+  firstParent?: boolean;
+  /** Leave the remote-tracking branches / the tags out of "all refs". */
+  hideRemotes?: boolean;
+  hideTags?: boolean;
+}
+
+/** Short labels of the active filters, for the status bar. */
+export function describeFilters(f: LogFilters): string[] {
+  return [
+    ...(f.author !== undefined ? [`autor ${f.author}`] : []),
+    ...(f.since !== undefined ? [`desde ${f.since}`] : []),
+    ...(f.until !== undefined ? [`até ${f.until}`] : []),
+    ...(f.firstParent ? ['primeiro pai'] : []),
+    ...(f.hideRemotes ? ['sem remotas'] : []),
+    ...(f.hideTags ? ['sem tags'] : []),
+  ];
+}
+
+export interface LogOptions extends LogFilters {
   /** Inclui todas as refs (branches, tags, remotos), menos o stash, não só HEAD. */
   all?: boolean;
   /** Revisões de partida (ex.: uma branch); ignorado com `all`. Sem nenhuma, usa HEAD. */
@@ -44,20 +70,27 @@ export interface LogOptions {
 
 export async function loadCommits(
   cwd: string,
-  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false}: LogOptions = {},
+  {all = false, revs = [], maxCount, paths = [], order = 'date', stashes = false, ...filters}: LogOptions = {},
 ): Promise<Commit[]> {
   const args = ['log', ORDER_FLAGS[order], `--format=${LOG_FORMAT}`];
   // With paths, git drops the commits that did not touch them; --parents makes %P show the
   // surviving parents instead of the original ones, so the layout does not wait for lost commits.
   if (paths.length > 0) args.push('--parents');
   // O stash guarda commits internos (index, untracked) que poluiriam o grafo.
-  if (all) args.push('--exclude=refs/stash', '--all');
+  if (all && (filters.hideRemotes || filters.hideTags)) {
+    // `--all` has no way to leave a kind of ref out: list the kinds that stay (HEAD covers a detached one).
+    args.push('--branches', ...(filters.hideTags ? [] : ['--tags']), ...(filters.hideRemotes ? [] : ['--remotes']), 'HEAD');
+  } else if (all) args.push('--exclude=refs/stash', '--all');
   else args.push(...revs);
+  if (filters.author !== undefined) args.push(`--author=${filters.author}`);
+  if (filters.since !== undefined) args.push(`--since=${filters.since}`);
+  if (filters.until !== undefined) args.push(`--until=${filters.until}`);
+  if (filters.firstParent) args.push('--first-parent');
   if (maxCount !== undefined) args.push(`--max-count=${maxCount}`);
   // Separa revisões de caminhos: uma branch chamada como um arquivo não confunde o git.
   args.push('--', ...paths);
   try {
-    const commits = parseLog(await git(args, cwd));
+    const commits = relink(parseLog(await git(args, cwd)), filters);
     return stashes ? await withStashes(cwd, commits) : commits;
   } catch (error) {
     // Repositório recém-criado, sem commits: não é erro.
@@ -66,6 +99,22 @@ export async function loadCommits(
     }
     throw error;
   }
+}
+
+/**
+ * Makes the parents match what was listed, so the layout does not keep a lane
+ * open for a commit that will never arrive. `--first-parent` still prints every
+ * parent of a merge, and a commit filtered out by author or date is not
+ * replaced by its ancestors in `%P` (only path limiting rewrites parents).
+ */
+function relink(commits: Commit[], {firstParent, author, since, until}: LogFilters): Commit[] {
+  let result = commits;
+  if (firstParent) result = result.map(c => ({...c, parents: c.parents.slice(0, 1)}));
+  if (author !== undefined || since !== undefined || until !== undefined) {
+    const shown = new Set(result.map(c => c.hash));
+    result = result.map(c => ({...c, parents: c.parents.filter(p => shown.has(p))}));
+  }
+  return result;
 }
 
 /**

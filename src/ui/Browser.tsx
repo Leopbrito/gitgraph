@@ -48,6 +48,8 @@ interface Props {
   initialLimit: number;
   /** Branches filtering the list at the start (from the command line); empty = all. */
   initialRevs?: string[];
+  /** Labels of the active log filters (--author, --since...), shown in the header. */
+  filters?: string[];
   /** Teto de commits (--max-count): sem ele, a lista cresce sob demanda. */
   maxCommits?: number;
   load: LoadGraph;
@@ -75,7 +77,7 @@ const WHEEL_STEP = 3;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, initialRevs = [], maxCommits, load, checkout, merge, changes, mouse}: Props) {
+export function Browser({initial, initialLimit, initialRevs = [], filters = [], maxCommits, load, checkout, merge, changes, mouse}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -465,6 +467,11 @@ export function Browser({initial, initialLimit, initialRevs = [], maxCommits, lo
         {query !== '' && (
           <Text bold color={tint(display, 'yellow')}>
             {` ${dot} busca "${query.trim()}" ${matchSet.has(cursor.selected) ? matches.indexOf(cursor.selected) + 1 : '-'}/${matches.length}${more ? '+' : ''}`}
+          </Text>
+        )}
+        {filters.length > 0 && (
+          <Text bold color={tint(display, 'magenta')}>
+            {` ${dot} ${filters.join(', ')}`}
           </Text>
         )}
         <Text dimColor>
