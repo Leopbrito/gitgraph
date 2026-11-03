@@ -135,6 +135,8 @@ Para a tabela não ficar velha há testes em `tests/ui/keymap.test.ts`: um varre
 
 ### Interação (TTY)
 
+**Um diálogo por vez.** O que está aberto sobre a lista é um único estado, `modal` (`Modal`, uma união discriminada em `Browser.tsx`: `checkout`, `merge`, `conflict`, `stopped`, `replay`, `reset`, `drop`, `ref`, `picker`, `search`). O mouse é ignorado se há `modal`; o `useInput`, o rodapé e o painel de detalhes são um `switch` sobre `modal?.kind` (o compilador acusa um caso esquecido, e dois diálogos não se empilham). A visão do commit (`viewing`) e a ajuda (`helping`) trocam a tela inteira e ficam à parte. Ao criar um diálogo: um caso em `Modal`, e um `case` em cada um dos três `switch`.
+
 - `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `Enter`/`d` abre a visão do commit; `c` faz checkout; `m` faz merge na branch atual; `q` sai.
 - `/` abre o seletor de branch (locais e remotas) com seleção múltipla: digitar filtra a lista, `↑`/`↓` movem, `Espaço` marca/desmarca (em "todas", limpa as marcas), `Enter` aplica, `Esc` cancela. O filtro é uma lista `revs: string[]` (vazia = todas, via `--exclude=refs/stash --all`); aplicar recarrega com `git log <revs...>`, ou seja, a união dos commits alcançáveis de cada branch. As marcas são do estado do seletor (`selected`), sobrevivem à digitação, e o seletor abre já com o filtro atual marcado. `chosenRevs` (puro, em `picker.ts`) decide o que o `Enter` aplica: as marcadas na ordem da lista ou, sem nenhuma, a destacada.
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.

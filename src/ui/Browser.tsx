@@ -50,6 +50,29 @@ import {useDoubleClick} from './useDoubleClick.js';
 import {clampOffset, followColumn, visibleColumns} from './graphWindow.js';
 import {clamp, itemAt, scrollIntoView, visibleEnd} from './viewport.js';
 
+/**
+ * What is open over the list, if anything. Only one thing can be: a dialog or a text field takes
+ * the keys (and the details panel) until it closes. The commit view and the help screen replace the
+ * whole screen instead, so they are separate (`viewing`, `helping`).
+ */
+type Modal =
+  | {kind: 'checkout'; targets: CheckoutTarget[]; index: number}
+  | {kind: 'merge'; targets: MergeTarget[]; index: number}
+  /** A merge in progress: index 0 = abort it, 1 = leave it for the terminal. */
+  | {kind: 'conflict'; files: string[]; index: number}
+  /** A stopped cherry-pick, revert or rebase (a merge has its own, older dialog). */
+  | {kind: 'stopped'; op: Operation; files: string[]; index: number}
+  /** Cherry-pick and revert ask first; reset has its own prompt. */
+  | {kind: 'replay'; op: 'cherry-pick' | 'revert'; commit: Commit}
+  | {kind: 'reset'}
+  /** Dropping a stash is the only stash action that asks first: apply and pop keep the changes. */
+  | {kind: 'drop'; hash: string; name: string}
+  /** Create, rename or delete a branch or tag (RefManager handles its own keys). */
+  | {kind: 'ref'; mode: RefMode}
+  | {kind: 'picker'; query: string; index: number; selected: string[]}
+  /** The search field is open; `origin` is the cursor when it opened, `previous` the search before it. */
+  | {kind: 'search'; origin: number; previous: string};
+
 export interface GraphData {
   rows: GraphRow[];
   refs: RefInfo;
@@ -122,7 +145,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [cursor, setCursor] = useState({selected: 0, offset: 0});
   // First visible graph column, for graphs wider than the terminal.
   const [graphOffset, setGraphOffset] = useState(0);
-  const [picker, setPicker] = useState<{query: string; index: number; selected: string[]} | null>(null);
+  const [modal, setModal] = useState<Modal | null>(null);
   // Work in flight: reloads and git actions. A count, not a flag, so a reload that finishes while a
   // checkout or merge is still running cannot make the list look idle (and let a second action start).
   const [pending, setPending] = useState(0);
@@ -131,24 +154,11 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const finish = useCallback(() => setPending(n => Math.max(0, n - 1)), []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<{targets: CheckoutTarget[]; index: number} | null>(null);
-  const [mergePrompt, setMergePrompt] = useState<{targets: MergeTarget[]; index: number} | null>(null);
-  // A merge in progress: 0 = abort it, 1 = leave it for the terminal.
-  const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [helping, setHelping] = useState(false);
-  const [refMode, setRefMode] = useState<RefMode | null>(null);
-  // Cherry-pick and revert ask first; reset has its own prompt.
-  const [replaying, setReplaying] = useState<{op: 'cherry-pick' | 'revert'; commit: Commit} | null>(null);
-  const [resetting, setResetting] = useState(false);
-  // A stopped cherry-pick, revert or rebase (a merge has its own, older dialog).
-  const [stopped, setStopped] = useState<{op: Operation; files: string[]; index: number} | null>(null);
-  // Dropping a stash is the only stash action that asks first: apply and pop keep the changes.
-  const [dropping, setDropping] = useState<{hash: string; name: string} | null>(null);
-  // Active search (highlight, n/N); `typing` is set while the input is open.
+  // Active search (highlight, n/N); the field itself is the `search` modal.
   const [query, setQuery] = useState('');
-  const [typing, setTyping] = useState<{origin: number; previous: string} | null>(null);
   // Looking for a match past what is loaded: the list grows until one beyond `after` shows up or the history ends.
   const [seeking, setSeeking] = useState<{after: number} | null>(null);
   const request = useRef(0);
@@ -276,7 +286,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const refsOf = (hash: string) => data.refs.byCommit.get(hash) ?? NO_REFS;
 
   const runCheckout = (target: CheckoutTarget) => {
-    setPrompt(null);
+    setModal(null);
     if (isCurrent(target, data.refs.head)) {
       setNotice(`já está em ${describeTarget(target)}`);
       return;
@@ -311,7 +321,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
 
   const runMerge = (target: MergeTarget) => {
     const branch = data.refs.head.branch ?? '';
-    setMergePrompt(null);
+    setModal(null);
     begin();
     setError(null);
     merge
@@ -325,7 +335,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         if (e instanceof MergeConflictError) {
           // The merge is in progress now: refresh so the header says so, then ask.
           reload(revs, limit, false, {follow: true});
-          setConflict({files: e.files, index: 0});
+          setModal({kind: 'conflict', files: e.files, index: 0});
         } else {
           setError(failure(e));
         }
@@ -334,7 +344,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   };
 
   const abortMerge = () => {
-    setConflict(null);
+    setModal(null);
     begin();
     merge
       .abort()
@@ -351,12 +361,12 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     if (!operation) return setNotice(`${op} em andamento: resolva no terminal`);
     operation
       .conflicts()
-      .then(files => setStopped({op, files, index: 0}))
+      .then(files => setModal({kind: 'stopped', op, files, index: 0}))
       .catch(e => setError(failure(e)));
   };
 
   const runOperation = (op: Operation, choice: OperationChoice) => {
-    setStopped(null);
+    setModal(null);
     if (choice === 'leave' || !operation) {
       setNotice(`${op} deixado em andamento: resolva no terminal ou aperte m para voltar aqui`);
       return;
@@ -376,7 +386,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
 
   const runReplay = (op: 'cherry-pick' | 'revert', target: Commit) => {
     if (!history) return;
-    setReplaying(null);
+    setModal(null);
     begin();
     setError(null);
     const mainline = target.parents.length > 1;
@@ -391,7 +401,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         if (e instanceof OperationStoppedError) {
           // Stopped halfway: refresh so the header says so, then ask what to do.
           reload(revs, limit, false);
-          setStopped({op: e.operation, files: e.files, index: 0});
+          setModal({kind: 'stopped', op: e.operation, files: e.files, index: 0});
         } else {
           setError(failure(e));
         }
@@ -403,7 +413,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
 
   const runStash = (op: StashOp, hash: string) => {
     if (!stash) return;
-    setDropping(null);
+    setModal(null);
     begin();
     setError(null);
     stash(op, hash)
@@ -427,20 +437,20 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   };
 
   const leaveMerge = () => {
-    setConflict(null);
+    setModal(null);
     setNotice('merge deixado em andamento: resolva no terminal ou aperte m para abortar');
   };
 
   // A merge is already in progress (started here or elsewhere): same dialog.
   const manageMerge = () => {
-    merge.conflicts().then(files => setConflict({files, index: 0})).catch(e => setError(failure(e)));
+    merge.conflicts().then(files => setModal({kind: 'conflict', files, index: 0})).catch(e => setError(failure(e)));
   };
 
   // Always the latest closure, so the subscription below is made only once.
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || helping || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped || replaying || resetting) return;
+    if (viewing || helping || modal) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -462,136 +472,134 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     // The commit view and the help screen have their own keys.
     if (viewing || helping) return;
 
-    // The ref manager handles its own keys.
-    if (refMode) return;
+    switch (modal?.kind) {
+      // The ref manager and the reset prompt handle their own keys.
+      case 'ref':
+      case 'reset':
+        return;
 
-    if (replaying) {
-      if (key.escape || input === 'n') setReplaying(null);
-      else if (key.return || input === 'y') runReplay(replaying.op, replaying.commit);
-      return;
-    }
+      case 'replay':
+        if (key.escape || input === 'n') setModal(null);
+        else if (key.return || input === 'y') runReplay(modal.op, modal.commit);
+        return;
 
-    // The reset prompt handles its own keys.
-    if (resetting) return;
-
-    if (stopped) {
-      const options = operationOptions(stopped.op);
-      const picked = options.find(o => o.key === input);
-      if (key.escape) runOperation(stopped.op, 'leave');
-      else if (picked) runOperation(stopped.op, picked.choice);
-      else if (key.return) runOperation(stopped.op, options[stopped.index]?.choice ?? 'leave');
-      else if (key.upArrow) setStopped({...stopped, index: clamp(stopped.index - 1, 0, options.length - 1)});
-      else if (key.downArrow) setStopped({...stopped, index: clamp(stopped.index + 1, 0, options.length - 1)});
-      return;
-    }
-
-    if (dropping) {
-      if (key.escape || input === 'n') setDropping(null);
-      else if (key.return || input === 'y') runStash('drop', dropping.hash);
-      return;
-    }
-
-    if (mergePrompt) {
-      const single = mergePrompt.targets.length === 1;
-      const last = mergePrompt.targets.length - 1;
-      if (key.escape || (single && input === 'n')) {
-        setMergePrompt(null);
-      } else if (key.return || (single && input === 'y')) {
-        const target = mergePrompt.targets[mergePrompt.index];
-        if (target) runMerge(target);
-      } else if (key.upArrow) {
-        setMergePrompt({...mergePrompt, index: clamp(mergePrompt.index - 1, 0, last)});
-      } else if (key.downArrow) {
-        setMergePrompt({...mergePrompt, index: clamp(mergePrompt.index + 1, 0, last)});
+      case 'stopped': {
+        const options = operationOptions(modal.op);
+        const picked = options.find(o => o.key === input);
+        if (key.escape) runOperation(modal.op, 'leave');
+        else if (picked) runOperation(modal.op, picked.choice);
+        else if (key.return) runOperation(modal.op, options[modal.index]?.choice ?? 'leave');
+        else if (key.upArrow) setModal({...modal, index: clamp(modal.index - 1, 0, options.length - 1)});
+        else if (key.downArrow) setModal({...modal, index: clamp(modal.index + 1, 0, options.length - 1)});
+        return;
       }
-      return;
-    }
 
-    if (conflict) {
-      if (input === 'a') abortMerge();
-      else if (input === 'd' || key.escape) leaveMerge();
-      else if (key.return) (conflict.index === 0 ? abortMerge : leaveMerge)();
-      else if (key.upArrow) setConflict({...conflict, index: 0});
-      else if (key.downArrow) setConflict({...conflict, index: 1});
-      return;
-    }
+      case 'drop':
+        if (key.escape || input === 'n') setModal(null);
+        else if (key.return || input === 'y') runStash('drop', modal.hash);
+        return;
 
-    if (prompt) {
-      const single = prompt.targets.length === 1;
-      const last = prompt.targets.length - 1;
-      if (key.escape || (single && input === 'n')) {
-        setPrompt(null);
-      } else if (key.return || (single && input === 'y')) {
-        const target = prompt.targets[prompt.index];
-        if (target) runCheckout(target);
-      } else if (key.upArrow) {
-        setPrompt({...prompt, index: clamp(prompt.index - 1, 0, last)});
-      } else if (key.downArrow) {
-        setPrompt({...prompt, index: clamp(prompt.index + 1, 0, last)});
-      }
-      return;
-    }
-
-    if (picker) {
-      const options = pickerOptions(branches, picker.query);
-      if (key.escape) {
-        setPicker(null);
-      } else if (key.return) {
-        const next = chosenRevs(picker.selected, branches, options[picker.index]);
-        setPicker(null);
-        if (next) {
-          setRevs(next);
-          setLimit(initialLimit);
-          reload(next, initialLimit, true);
+      case 'merge': {
+        const single = modal.targets.length === 1;
+        const last = modal.targets.length - 1;
+        if (key.escape || (single && input === 'n')) {
+          setModal(null);
+        } else if (key.return || (single && input === 'y')) {
+          const target = modal.targets[modal.index];
+          if (target) runMerge(target);
+        } else if (key.upArrow) {
+          setModal({...modal, index: clamp(modal.index - 1, 0, last)});
+        } else if (key.downArrow) {
+          setModal({...modal, index: clamp(modal.index + 1, 0, last)});
         }
-      } else if (input === ' ') {
-        // Branch names have no spaces, so Space is free to toggle the selection.
-        const option = options[picker.index];
-        if (option) {
-          setPicker({
-            ...picker,
-            selected: option.rev === null ? [] : toggleBranch(picker.selected, option.rev),
-          });
-        }
-      } else if (key.upArrow) {
-        setPicker({...picker, index: clamp(picker.index - 1, 0, options.length - 1)});
-      } else if (key.downArrow) {
-        setPicker({...picker, index: clamp(picker.index + 1, 0, options.length - 1)});
-      } else if (key.backspace || key.delete) {
-        setPicker({...picker, query: picker.query.slice(0, -1), index: 0});
-      } else if (input && !key.ctrl && !key.meta) {
-        setPicker({...picker, query: picker.query + input, index: 0});
+        return;
       }
-      return;
-    }
 
-    if (typing) {
-      // Each keystroke searches again and jumps to the first match from where the search began.
-      const update = (next: string) => {
-        setQuery(next);
-        select(firstFrom(findMatches(data.rows, next), typing.origin) ?? typing.origin);
-      };
-      if (key.escape) {
-        setQuery(typing.previous);
-        setTyping(null);
-        select(typing.origin);
-      } else if (key.return) {
-        setTyping(null);
-        if (query.trim() !== '' && matches.length === 0) {
-          if (more) {
-            // Nothing among the loaded commits, but there is more history: keep looking.
-            setSeeking({after: typing.origin - 1});
-          } else {
-            setNotice(`nenhum commit encontrado para "${query.trim()}"`);
-            setQuery('');
+      case 'conflict':
+        if (input === 'a') abortMerge();
+        else if (input === 'd' || key.escape) leaveMerge();
+        else if (key.return) (modal.index === 0 ? abortMerge : leaveMerge)();
+        else if (key.upArrow) setModal({...modal, index: 0});
+        else if (key.downArrow) setModal({...modal, index: 1});
+        return;
+
+      case 'checkout': {
+        const single = modal.targets.length === 1;
+        const last = modal.targets.length - 1;
+        if (key.escape || (single && input === 'n')) {
+          setModal(null);
+        } else if (key.return || (single && input === 'y')) {
+          const target = modal.targets[modal.index];
+          if (target) runCheckout(target);
+        } else if (key.upArrow) {
+          setModal({...modal, index: clamp(modal.index - 1, 0, last)});
+        } else if (key.downArrow) {
+          setModal({...modal, index: clamp(modal.index + 1, 0, last)});
+        }
+        return;
+      }
+
+      case 'picker': {
+        const options = pickerOptions(branches, modal.query);
+        if (key.escape) {
+          setModal(null);
+        } else if (key.return) {
+          const next = chosenRevs(modal.selected, branches, options[modal.index]);
+          setModal(null);
+          if (next) {
+            setRevs(next);
+            setLimit(initialLimit);
+            reload(next, initialLimit, true);
           }
+        } else if (input === ' ') {
+          // Branch names have no spaces, so Space is free to toggle the selection.
+          const option = options[modal.index];
+          if (option) {
+            setModal({
+              ...modal,
+              selected: option.rev === null ? [] : toggleBranch(modal.selected, option.rev),
+            });
+          }
+        } else if (key.upArrow) {
+          setModal({...modal, index: clamp(modal.index - 1, 0, options.length - 1)});
+        } else if (key.downArrow) {
+          setModal({...modal, index: clamp(modal.index + 1, 0, options.length - 1)});
+        } else if (key.backspace || key.delete) {
+          setModal({...modal, query: modal.query.slice(0, -1), index: 0});
+        } else if (input && !key.ctrl && !key.meta) {
+          setModal({...modal, query: modal.query + input, index: 0});
         }
-      } else if (key.backspace || key.delete) {
-        update(query.slice(0, -1));
-      } else if (input && !key.ctrl && !key.meta) {
-        update(query + input);
+        return;
       }
-      return;
+
+      case 'search': {
+        // Each keystroke searches again and jumps to the first match from where the search began.
+        const update = (next: string) => {
+          setQuery(next);
+          select(firstFrom(findMatches(data.rows, next), modal.origin) ?? modal.origin);
+        };
+        if (key.escape) {
+          setQuery(modal.previous);
+          setModal(null);
+          select(modal.origin);
+        } else if (key.return) {
+          setModal(null);
+          if (query.trim() !== '' && matches.length === 0) {
+            if (more) {
+              // Nothing among the loaded commits, but there is more history: keep looking.
+              setSeeking({after: modal.origin - 1});
+            } else {
+              setNotice(`nenhum commit encontrado para "${query.trim()}"`);
+              setQuery('');
+            }
+          }
+        } else if (key.backspace || key.delete) {
+          update(query.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          update(query + input);
+        }
+        return;
+      }
     }
 
     if (notice) setNotice(null);
@@ -638,7 +646,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       if (!commit?.stash) setNotice('esta tecla só vale em um stash (a aplica, p dá pop, x apaga)');
       else if (!stash) setNotice('operações de stash indisponíveis');
       else if (loading) setNotice('espere a carga terminar');
-      else if (input === 'x') setDropping({hash: commit.hash, name: stashName(commit.hash)});
+      else if (input === 'x') setModal({kind: 'drop', hash: commit.hash, name: stashName(commit.hash)});
       else runStash(input === 'a' ? 'apply' : 'pop', commit.hash);
     }
     else if (input === 'b' || input === 't' || input === 'T' || input === 'R' || input === 'D') {
@@ -655,7 +663,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         );
       } else {
         setError(null);
-        setRefMode(mode);
+        setModal({kind: 'ref', mode});
       }
     }
     else if (input === 'C' || input === 'v' || input === 'X') {
@@ -670,14 +678,14 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       else if (input === 'C' && commit.hash === head.hash) setNotice('esse commit já é o HEAD');
       else {
         setError(null);
-        if (input === 'X') setResetting(true);
-        else setReplaying({op: input === 'C' ? 'cherry-pick' : 'revert', commit});
+        if (input === 'X') setModal({kind: 'reset'});
+        else setModal({kind: 'replay', op: input === 'C' ? 'cherry-pick' : 'revert', commit});
       }
     }
     else if (input === '?') setHelping(true);
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
-      setTyping({origin: cursor.selected, previous: query});
+      setModal({kind: 'search', origin: cursor.selected, previous: query});
       setQuery('');
     }
     else if (input === 'n' || input === 'N') {
@@ -693,7 +701,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         if (forward ? found <= cursor.selected : found >= cursor.selected) setNotice('a busca recomeçou do outro lado');
       }
     }
-    else if (input === '/') setPicker({query: '', index: 0, selected: revs});
+    else if (input === '/') setModal({kind: 'picker', query: '', index: 0, selected: revs});
     else if ((input === 'm' || input === 'c') && loading) setNotice('espere a carga terminar');
     else if (input === 'm') {
       const head = data.refs.head;
@@ -705,7 +713,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       else if (commit.hash === head.hash) setNotice('esse já é o commit da branch atual');
       else {
         setError(null);
-        setMergePrompt({targets: mergeTargets(commit.hash, refsOf(commit.hash), head.branch), index: 0});
+        setModal({kind: 'merge', targets: mergeTargets(commit.hash, refsOf(commit.hash), head.branch), index: 0});
       }
     }
     else if (input === 'c' && notACommit('não há o que fazer checkout')) return;
@@ -719,7 +727,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         setError(null);
         // With several branches, start on the first one that is not the current.
         const index = Math.max(0, targets.findIndex(t => !isCurrent(t, data.refs.head)));
-        setPrompt({targets, index});
+        setModal({kind: 'checkout', targets, index});
       }
     }
     else if (key.escape) {
@@ -746,30 +754,32 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     count === 1
       ? `Enter/y confirma ${dot} Esc/n cancela`
       : `${arrows} escolher ${dot} Enter confirma ${dot} Esc cancela`;
-  const footerHint = prompt
-    ? confirmHint(prompt.targets.length)
-    : mergePrompt
-      ? confirmHint(mergePrompt.targets.length)
-      : replaying
-        ? confirmHint(1)
-      : resetting
-        ? `Esc cancela`
-      : stopped
-        ? `a aborta ${dot} c continua${canSkip(stopped.op) ? ` ${dot} s pula` : ''} ${dot} d/Esc deixa ${dot} ${arrows}/Enter escolhe`
-      : refMode
-        ? `Esc cancela`
-      : dropping
-        ? confirmHint(1)
-      : conflict
-        ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
-        : seeking
+  const footerHint = (() => {
+    switch (modal?.kind) {
+      case 'checkout':
+      case 'merge':
+        return confirmHint(modal.targets.length);
+      case 'replay':
+      case 'drop':
+        return confirmHint(1);
+      case 'reset':
+      case 'ref':
+        return `Esc cancela`;
+      case 'stopped':
+        return `a aborta ${dot} c continua${canSkip(modal.op) ? ` ${dot} s pula` : ''} ${dot} d/Esc deixa ${dot} ${arrows}/Enter escolhe`;
+      case 'conflict':
+        return `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`;
+      case 'search':
+        return `digite para buscar ${dot} Enter confirma ${dot} Esc cancela`;
+      case 'picker':
+        return `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`;
+      case undefined:
+        return seeking
           ? `procurando "${query.trim()}" no histórico${ellipsis(display)} ${dot} Esc cancela`
-        : typing
-          ? `digite para buscar ${dot} Enter confirma ${dot} Esc cancela`
-        : picker
-          ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
           : (notice ??
-            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}${listFooter(dot, display.ascii)}`);
+              `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}${listFooter(dot, display.ascii)}`);
+    }
+  })();
 
   if (helping) return <HelpView onClose={() => setHelping(false)} />;
 
@@ -787,6 +797,102 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       />
     );
   }
+
+  // The details of the selected commit, or the dialog that took their place.
+  const details = (
+    <CommitDetail
+      commit={commit}
+      refs={commit ? refsOf(commit.hash) : NO_REFS}
+      head={commit ? headOf(commit.hash) : {isHead: false, branch: null}}
+    />
+  );
+  const panel = (() => {
+    switch (modal?.kind) {
+      case 'checkout':
+        return <CheckoutPrompt targets={modal.targets} index={modal.index} head={data.refs.head} />;
+      case 'merge':
+        return <MergePrompt targets={modal.targets} index={modal.index} branch={data.refs.head.branch ?? ''} />;
+      case 'replay':
+        return (
+          <ConfirmPrompt
+            title={
+              modal.op === 'cherry-pick'
+                ? `Cherry-pick de ${modal.commit.hash.slice(0, 7)} em ${data.refs.head.branch ?? 'HEAD destacado'}?`
+                : `Reverter ${modal.commit.hash.slice(0, 7)}?`
+            }
+            lines={[
+              modal.commit.subject,
+              modal.commit.parents.length > 1
+                ? 'Commit de merge: aplicado em relação ao 1º pai (git ... -m 1).'
+                : modal.op === 'cherry-pick'
+                  ? 'Cria um commit novo com as mesmas mudanças, com a mensagem original.'
+                  : 'Cria um commit novo que desfaz as mudanças dele, com a mensagem do git.',
+              'Se houver conflitos, você escolhe entre abortar, continuar ou pular.',
+            ]}
+          />
+        );
+      case 'reset':
+        return history && commit ? (
+          <ResetPrompt
+            target={commit}
+            branch={data.refs.head.branch}
+            actions={history}
+            onCancel={() => setModal(null)}
+            onDone={done => {
+              setModal(null);
+              reload(revs, limit, false, {follow: true, notice: done});
+            }}
+          />
+        ) : (
+          details
+        );
+      case 'stopped':
+        return <OperationPrompt operation={modal.op} files={modal.files} index={modal.index} />;
+      case 'ref':
+        return refEdit && commit ? (
+          <RefManager
+            mode={modal.mode}
+            commit={commit}
+            refs={refsOf(commit.hash)}
+            currentBranch={data.refs.head.branch}
+            actions={refEdit}
+            onCancel={() => setModal(null)}
+            onDone={done => {
+              setModal(null);
+              reload(revs, limit, false, {follow: true, notice: done});
+            }}
+          />
+        ) : (
+          details
+        );
+      case 'drop':
+        return (
+          <ConfirmPrompt
+            danger
+            title={`Apagar ${modal.name}?`}
+            lines={[
+              'As alterações guardadas serão perdidas: o git não as devolve depois do drop.',
+              'Para mantê-las, aplique (a) antes ou use o pop (p), que aplica e apaga.',
+            ]}
+          />
+        );
+      case 'conflict':
+        return <ConflictPrompt files={modal.files} index={modal.index} />;
+      case 'search':
+        return <SearchPrompt query={query} count={matches.length} more={more} />;
+      case 'picker':
+        return (
+          <BranchPicker
+            query={modal.query}
+            options={pickerOptions(branches, modal.query)}
+            index={modal.index}
+            selected={modal.selected}
+          />
+        );
+      case undefined:
+        return details;
+    }
+  })();
 
   return (
     <Box flexDirection="column" height={terminalRows - 1}>
@@ -828,84 +934,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         ))}
       </Box>
       <Text dimColor>{rule(display, columns)}</Text>
-      {prompt ? (
-        <CheckoutPrompt targets={prompt.targets} index={prompt.index} head={data.refs.head} />
-      ) : mergePrompt ? (
-        <MergePrompt
-          targets={mergePrompt.targets}
-          index={mergePrompt.index}
-          branch={data.refs.head.branch ?? ''}
-        />
-      ) : replaying ? (
-        <ConfirmPrompt
-          title={
-            replaying.op === 'cherry-pick'
-              ? `Cherry-pick de ${replaying.commit.hash.slice(0, 7)} em ${data.refs.head.branch ?? 'HEAD destacado'}?`
-              : `Reverter ${replaying.commit.hash.slice(0, 7)}?`
-          }
-          lines={[
-            replaying.commit.subject,
-            replaying.commit.parents.length > 1
-              ? 'Commit de merge: aplicado em relação ao 1º pai (git ... -m 1).'
-              : replaying.op === 'cherry-pick'
-                ? 'Cria um commit novo com as mesmas mudanças, com a mensagem original.'
-                : 'Cria um commit novo que desfaz as mudanças dele, com a mensagem do git.',
-            'Se houver conflitos, você escolhe entre abortar, continuar ou pular.',
-          ]}
-        />
-      ) : resetting && history && commit ? (
-        <ResetPrompt
-          target={commit}
-          branch={data.refs.head.branch}
-          actions={history}
-          onCancel={() => setResetting(false)}
-          onDone={done => {
-            setResetting(false);
-            reload(revs, limit, false, {follow: true, notice: done});
-          }}
-        />
-      ) : stopped ? (
-        <OperationPrompt operation={stopped.op} files={stopped.files} index={stopped.index} />
-      ) : refMode && refEdit && commit ? (
-        <RefManager
-          mode={refMode}
-          commit={commit}
-          refs={refsOf(commit.hash)}
-          currentBranch={data.refs.head.branch}
-          actions={refEdit}
-          onCancel={() => setRefMode(null)}
-          onDone={done => {
-            setRefMode(null);
-            reload(revs, limit, false, {follow: true, notice: done});
-          }}
-        />
-      ) : dropping ? (
-        <ConfirmPrompt
-          danger
-          title={`Apagar ${dropping.name}?`}
-          lines={[
-            'As alterações guardadas serão perdidas: o git não as devolve depois do drop.',
-            'Para mantê-las, aplique (a) antes ou use o pop (p), que aplica e apaga.',
-          ]}
-        />
-      ) : conflict ? (
-        <ConflictPrompt files={conflict.files} index={conflict.index} />
-      ) : typing ? (
-        <SearchPrompt query={query} count={matches.length} more={more} />
-      ) : picker ? (
-        <BranchPicker
-          query={picker.query}
-          options={pickerOptions(branches, picker.query)}
-          index={picker.index}
-          selected={picker.selected}
-        />
-      ) : (
-        <CommitDetail
-          commit={commit}
-          refs={commit ? refsOf(commit.hash) : []}
-          head={commit ? headOf(commit.hash) : {isHead: false, branch: null}}
-        />
-      )}
+      {panel}
       <Text wrap="truncate-end" color={error ? tint(display, 'red') : undefined} dimColor={!error}>
         {error ? `erro: ${error}` : footerHint}
       </Text>

@@ -329,6 +329,16 @@ describe('Browser', () => {
       await tick();
     });
 
+    it('keeps a single dialog open: other keys do not stack a second one on top', async () => {
+      const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, 'j', 'j', 'c');
+      expect(lastFrame()).toContain('Checkout para feature?');
+      await press(stdin, '/', 's', 'm', '?');
+      expect(lastFrame()).toContain('Checkout para feature?');
+      expect(lastFrame()).not.toContain('Branch:');
+      expect(lastFrame()).not.toContain('Buscar');
+    });
+
     it('also confirms with y', async () => {
       const checkout = vi.fn<(t: CheckoutTarget) => Promise<void>>().mockResolvedValue();
       const load = vi.fn<LoadGraph>().mockResolvedValue(data(5));
