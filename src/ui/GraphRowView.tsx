@@ -25,18 +25,20 @@ interface Props {
   selected?: boolean;
   /** The row matches the active search. */
   matched?: boolean;
+  /** Part of the graph to show when it is wider than the terminal (in columns). */
+  columnWindow?: {offset: number; count: number};
 }
 
 // Cada linha é um único <Text> truncado na largura do terminal: o grafo não
 // desalinha e commits longos não quebram em várias linhas.
-export function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false}: Props) {
+export function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false, columnWindow}: Props) {
   const display = useDisplay();
   const lines = renderGraphLines(row, row.width, {spaced: display.spaced});
   const {commit} = row;
   return (
     <Box flexDirection="column">
       <Text wrap="truncate-end">
-        <GraphCells cells={lines.node} graphWidth={graphWidth} />
+        <GraphCells cells={lines.node} graphWidth={graphWidth} columnWindow={columnWindow} />
         {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso); `*` marca os resultados da busca. */}
         <Text>{selected ? '>' : matched ? '*' : ' '}</Text>
         <Text inverse={selected}>
@@ -57,17 +59,29 @@ export function GraphRowView({row, graphWidth, refs, head, selected = false, mat
       </Text>
       {lines.connector && (
         <Text wrap="truncate-end">
-          <GraphCells cells={lines.connector} graphWidth={graphWidth} />
+          <GraphCells cells={lines.connector} graphWidth={graphWidth} columnWindow={columnWindow} />
         </Text>
       )}
     </Box>
   );
 }
 
-function GraphCells({cells, graphWidth}: {cells: Cell[]; graphWidth: number}) {
+function GraphCells({
+  cells,
+  graphWidth,
+  columnWindow,
+}: {
+  cells: Cell[];
+  graphWidth: number;
+  columnWindow?: {offset: number; count: number};
+}) {
   const display = useDisplay();
-  const shown = display.ascii ? toAscii(cells) : cells;
-  const pad = Math.max(0, graphWidth * CELLS_PER_COLUMN - shown.length);
+  const all = display.ascii ? toAscii(cells) : cells;
+  // Without a window the whole graph is shown, padded to the widest row.
+  const shown = columnWindow
+    ? all.slice(columnWindow.offset * CELLS_PER_COLUMN, (columnWindow.offset + columnWindow.count) * CELLS_PER_COLUMN)
+    : all;
+  const pad = Math.max(0, (columnWindow?.count ?? graphWidth) * CELLS_PER_COLUMN - shown.length);
   return (
     <>
       {shown.map((cell, i) => (

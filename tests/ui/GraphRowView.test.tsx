@@ -55,3 +55,34 @@ describe('laneColor', () => {
     expect(laneColor(2, ['red', 'blue'])).toBe('red');
   });
 });
+
+describe('GraphRowView column window', () => {
+  // A merge of three lanes: a node in column 0 with lanes in columns 1 and 2.
+  const wide = layoutGraph([
+    {...commit, hash: 'm', parents: ['a', 'b', 'c'], subject: 'wide'},
+    {...commit, hash: 'a', parents: [], subject: 'a'},
+    {...commit, hash: 'b', parents: [], subject: 'b'},
+    {...commit, hash: 'c', parents: [], subject: 'c'},
+  ]);
+  const row = wide[0]!;
+  const draw = (columnWindow?: {offset: number; count: number}) =>
+    render(
+      <DisplayContext.Provider value={{color: false, ascii: false, spaced: false}}>
+        <GraphRowView row={row} graphWidth={3} refs={[]} head={{isHead: false, branch: null}} columnWindow={columnWindow} />
+      </DisplayContext.Provider>,
+    ).lastFrame() ?? '';
+
+  it('shows the whole graph without a window', () => {
+    expect(draw()).toMatch(/^● {5}/);
+  });
+
+  it('cuts the columns outside the window and pads to its width', () => {
+    // Columns 1-2 only: the node in column 0 is out, and the text starts after 2 columns (4 cells) and the marker.
+    const frame = draw({offset: 1, count: 2});
+    expect(frame).not.toContain('●');
+    expect(frame).toMatch(/^ {5}m wide/);
+    expect(frame).toContain('wide');
+    // A window of one column.
+    expect(draw({offset: 0, count: 1})).toMatch(/^●  m wide/);
+  });
+});

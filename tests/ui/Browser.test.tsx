@@ -1224,6 +1224,63 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('wide graphs', () => {
+    // 50 tips, each waiting for its own parent that shows up later: 50 open lanes, about twice the
+    // 26 columns a 100-column terminal leaves for the graph.
+    const wide = (): GraphData => {
+      const tips = Array.from({length: 50}, (_, i) => commit(i, [commit(100 + i, []).hash]));
+      const parents = Array.from({length: 50}, (_, i) => commit(100 + i, []));
+      return {rows: layoutGraph([...tips, ...parents]), refs: {...refs, head: {hash: 'h000100', branch: 'main'}}};
+    };
+    const open = () => render(<Browser initial={wide()} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+
+    it('limits the graph so the commit text stays visible, and says which columns are shown', () => {
+      const frame = open().lastFrame() ?? '';
+      expect(frame).toContain('grafo 1-26/50 (h/l)');
+      const first = frame.split('\n').find(l => l.includes('h000000')) ?? '';
+      expect(first).toContain('commit 0');
+      expect(first).toContain('Ana,');
+    });
+
+    it('l and h pan the graph by two columns, within the limits', async () => {
+      const {stdin, lastFrame} = open();
+      await press(stdin, 'h');
+      expect(lastFrame()).toContain('grafo 1-26/50');
+      await press(stdin, 'l', 'l');
+      expect(lastFrame()).toContain('grafo 5-30/50');
+      await press(stdin, 'h');
+      expect(lastFrame()).toContain('grafo 3-28/50');
+      // Pressed back to back, without waiting for a render: every press still counts.
+      for (let i = 0; i < 20; i++) stdin.write('l');
+      await tick();
+      expect(lastFrame()).toContain('grafo 25-50/50');
+    });
+
+    it('the arrows pan too', async () => {
+      const {stdin, lastFrame} = open();
+      await press(stdin, '\u001B[C');
+      expect(lastFrame()).toContain('grafo 3-28/50');
+      await press(stdin, '\u001B[D');
+      expect(lastFrame()).toContain('grafo 1-26/50');
+    });
+
+    it('moving the selection to a node outside the window brings it into view', async () => {
+      const {stdin, lastFrame} = open();
+      // The row of tip 40 has its node in column 40.
+      await press(stdin, ...Array<string>(40).fill('j'));
+      expect(lastFrame()).toContain('41/100');
+      expect(lastFrame()).toContain('grafo 16-41/50');
+      await press(stdin, 'g');
+      expect(lastFrame()).toContain('grafo 1-26/50');
+    });
+
+    it('a narrow graph is not clipped and h/l do nothing', async () => {
+      const {stdin, lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, 'l');
+      expect(lastFrame()).not.toContain('grafo ');
+    });
+  });
+
   describe('cherry-pick, revert and reset (C, v, X)', () => {
     const history = (over: Partial<HistoryActions> = {}): HistoryActions => ({
       cherryPick: vi.fn().mockResolvedValue(undefined),

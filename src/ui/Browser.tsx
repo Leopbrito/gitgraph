@@ -45,6 +45,7 @@ import {findMatches, firstFrom, nextMatch} from './search.js';
 import {branchNames, chosenRevs, pickerOptions, toggleBranch} from './picker.js';
 import type {MouseEvent, MouseSource} from './mouse.js';
 import {useDoubleClick} from './useDoubleClick.js';
+import {clampOffset, followColumn, visibleColumns} from './graphWindow.js';
 import {clamp, itemAt, scrollIntoView, visibleEnd} from './viewport.js';
 
 export interface GraphData {
@@ -96,6 +97,8 @@ const CHROME_LINES = 4;
 const LOAD_AHEAD = 20;
 // The list starts below the header line.
 const LIST_TOP = 1;
+// Graph columns moved per h/l press.
+const PAN_STEP = 2;
 // Commits moved per wheel notch.
 const WHEEL_STEP = 3;
 
@@ -112,6 +115,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [revs, setRevs] = useState<string[]>(initialRevs);
   const [limit, setLimit] = useState(initialLimit);
   const [cursor, setCursor] = useState({selected: 0, offset: 0});
+  // First visible graph column, for graphs wider than the terminal.
+  const [graphOffset, setGraphOffset] = useState(0);
   const [picker, setPicker] = useState<{query: string; index: number; selected: string[]} | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +153,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     [data.rows],
   );
   const total = data.rows.length;
+  const visibleCols = visibleColumns(graphWidth, columns);
+  const clipped = visibleCols < graphWidth;
+  const graphStart = clampOffset(graphOffset, graphWidth, visibleCols);
   const matches = useMemo(() => findMatches(data.rows, query), [data.rows, query]);
   const matchSet = useMemo(() => new Set(matches), [matches]);
   const listHeight = Math.max(3, terminalRows - DETAIL_LINES - CHROME_LINES);
@@ -196,11 +204,16 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     }
   }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, revs, reload]);
 
-  const select = (index: number) =>
-    setCursor({
-      selected: clamp(index, 0, Math.max(0, total - 1)),
-      offset,
-    });
+  const select = (index: number) => {
+    const selected = clamp(index, 0, Math.max(0, total - 1));
+    setCursor({selected, offset});
+    // The node of the selected commit must stay in view; panning by hand is only undone by moving the selection.
+    const column = data.rows[selected]?.column;
+    if (column !== undefined) setGraphOffset(followColumn(graphStart, column, visibleCols));
+  };
+  // Functional update: several presses before a render must each count.
+  const panGraph = (delta: number) =>
+    setGraphOffset(o => clampOffset(clampOffset(o, graphWidth, visibleCols) + delta, graphWidth, visibleCols));
 
   const commit = data.rows[cursor.selected]?.commit;
   // The uncommitted-changes node is not a commit: nothing to open, check out, merge or copy.
@@ -531,6 +544,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     if (input === 'q') exit();
     else if (key.downArrow || input === 'j') select(cursor.selected + 1);
     else if (key.upArrow || input === 'k') select(cursor.selected - 1);
+    else if (key.leftArrow || input === 'h') panGraph(-PAN_STEP);
+    else if (key.rightArrow || input === 'l') panGraph(PAN_STEP);
     else if (key.pageDown) select(cursor.selected + pageSize);
     else if (key.pageUp) select(cursor.selected - pageSize);
     else if (key.home || input === 'g') select(0);
@@ -714,6 +729,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
             {` ${dot} busca "${query.trim()}" ${matchSet.has(cursor.selected) ? matches.indexOf(cursor.selected) + 1 : '-'}/${matches.length}${more ? '+' : ''}`}
           </Text>
         )}
+        {clipped && (
+          <Text dimColor>{` ${dot} grafo ${graphStart + 1}-${graphStart + visibleCols}/${graphWidth} (h/l)`}</Text>
+        )}
         {filters.length > 0 && (
           <Text bold color={tint(display, 'magenta')}>
             {` ${dot} ${filters.join(', ')}`}
@@ -733,6 +751,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
             head={headOf(row.commit.hash)}
             selected={offset + i === cursor.selected}
             matched={matchSet.has(offset + i)}
+            columnWindow={clipped ? {offset: graphStart, count: visibleCols} : undefined}
           />
         ))}
       </Box>

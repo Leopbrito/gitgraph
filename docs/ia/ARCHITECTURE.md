@@ -83,6 +83,7 @@ src/
     ConflictPrompt.tsx # merge em andamento: abortar ou deixar (idem)
     viewport.ts    # janela de linhas visíveis com itens de altura 1 ou 2, e itemAt(): linha da tela -> item (puro)
     mouse.ts       # parseMouse(): relatórios SGR -> eventos de clique/roda (puro); MouseSource
+    graphWindow.ts # visibleColumns()/clampOffset()/followColumn(): janela horizontal sobre as colunas do grafo (puro)
     picker.ts      # lista e filtro de branches (puro)
     follow.ts      # followCommit(): onde está o commit selecionado depois de recarregar (puro)
     search.ts      # matchesCommit()/findMatches()/firstFrom()/nextMatch(): busca em memória nos commits carregados (puro)
@@ -118,6 +119,10 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 - **TTY:** `Browser` roda em tela alternativa (`alternateScreen` do Ink), então o scrollback do terminal não é afetado. O layout tem altura fixa: cabeçalho, lista, separador, detalhes (5 linhas) e rodapé, mais 1 linha de folga (se a saída ocupar todas as linhas, o Ink limpa a tela a cada render). Cada linha é truncada na largura do terminal.
 - **Sem TTY (pipe/redirecionamento):** `formatPlain` imprime texto puro, sem cor nem quebra, como o `git log`. Não passa pelo Ink.
 - Cada coluna do grafo ocupa 2 caracteres (glifo + espaço, `─`, `╱` ou `╲`).
+
+### Grafos largos (`h`/`l`)
+
+Com muitas lanes abertas o grafo passa da largura do terminal e empurra o texto do commit para fora. A issue dava duas saídas, e a implementação usa as duas: **o texto tem prioridade** (`visibleColumns` reserva `MIN_TEXT_WIDTH` = 48 caracteres para marcador, hash, assunto e autor e dá o resto, em colunas de 2 caracteres, ao grafo, nunca menos de 4) e **o grafo rola** (`h`/`l` ou `←`/`→`, `PAN_STEP` = 2 colunas). `Browser` guarda só `graphOffset`; `graphStart = clampOffset(...)` é recalculado a cada render, então redimensionar o terminal não deixa a janela fora do grafo (mesma ideia do `scrollIntoView`). `GraphRowView` recebe `columnWindow` e fatia as células **depois** de `toAscii` (cada coluna são 2 células: glifo e separador), então vale para ASCII e para a linha de ligação; o padding passa a ser a largura da janela. `select()` chama `followColumn` com a coluna do nó do commit selecionado: o nó nunca fica fora de vista ao navegar, mas o usuário pode rolar à mão para outro lado e só perde isso ao mover a seleção. O cabeçalho mostra `grafo a-b/total (h/l)` só quando há recorte. O `panGraph` usa atualização funcional para que teclas seguidas antes de um render contem todas. A saída por pipe não é afetada, e as lanes cortadas não aparecem (as ligações de uma lane escondida somem junto), o que é o custo de priorizar o texto.
 
 ### Interação (TTY)
 
