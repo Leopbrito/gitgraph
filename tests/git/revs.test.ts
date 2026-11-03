@@ -22,6 +22,11 @@ describe('revisionNames', () => {
     ['^a', ['a']],
     ['..b', ['b']],
     ['a..', ['a']],
+    ['HEAD^!', ['HEAD']],
+    ['HEAD^@', ['HEAD']],
+    ['HEAD^-', ['HEAD']],
+    ['main^-2', ['main']],
+    ['v1.0^!', ['v1.0']],
   ])('%s', (arg, names) => {
     expect(revisionNames(arg)).toEqual(names);
   });
@@ -34,7 +39,7 @@ describe('verifyRevisions', () => {
     run('tag', 'v1');
     run('commit', '--allow-empty', '-q', '-m', 'two');
     const hash = run('rev-parse', 'HEAD');
-    await expect(verifyRevisions(dir, ['main', 'v1', hash.slice(0, 7), 'v1..main', '^v1', 'HEAD~1'])).resolves.toBeUndefined();
+    await expect(verifyRevisions(dir, ['main', 'v1', hash.slice(0, 7), 'v1..main', '^v1', 'HEAD~1', 'HEAD^!', 'HEAD^@', 'main^-', 'main^-1'])).resolves.toBeUndefined();
     await expect(verifyRevisions(dir, [])).resolves.toBeUndefined();
   });
 

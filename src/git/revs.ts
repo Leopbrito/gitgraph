@@ -1,10 +1,15 @@
 import {git} from './exec.js';
 
-/** The names inside a revision argument: `a..b`, `a...b` and `^a` hold plain revisions. */
+/**
+ * The names inside a revision argument: `a..b`, `a...b` and `^a` hold plain
+ * revisions, and `rev^!`, `rev^@` and `rev^-<n>` are shorthands built on one
+ * (`^` cannot appear in a ref name, so the suffix is never part of it).
+ */
 export function revisionNames(arg: string): string[] {
   return arg
     .replace(/^\^/, '')
     .split(/\.{2,3}/)
+    .map(name => name.replace(/\^(?:[!@]|-\d*)$/, ''))
     .filter(name => name !== '');
 }
 
