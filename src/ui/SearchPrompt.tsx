@@ -19,11 +19,15 @@ export function SearchPrompt({query, count, more}: Props) {
         {query}
         <Text inverse> </Text>
         {query.trim() !== '' && (
-          <Text dimColor>{`  ${count === 0 ? 'nenhum resultado' : `${count}${more ? '+' : ''} ${count === 1 ? 'resultado' : 'resultados'}`}`}</Text>
+          <Text dimColor>
+            {`  ${count === 0 ? (more ? 'nenhum resultado carregado' : 'nenhum resultado') : `${count}${more ? '+' : ''} ${count === 1 ? 'resultado' : 'resultados'}`}`}
+          </Text>
         )}
       </Text>
       <Text dimColor wrap="truncate-end">
-        Mensagem, autor, e-mail ou hash, sem diferenciar maiúsculas.
+        {query.trim() !== '' && count === 0 && more
+          ? 'Enter procura no resto do histórico, carregando mais commits.'
+          : 'Mensagem, autor, e-mail ou hash, sem diferenciar maiúsculas.'}
       </Text>
       <Text> </Text>
       <Text> </Text>

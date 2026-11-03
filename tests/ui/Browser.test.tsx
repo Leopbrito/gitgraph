@@ -1899,6 +1899,103 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('aperte s para buscar');
     });
 
+    describe('through history that is not loaded yet', () => {
+      // 600 commits ("commit 0" newest); the list holds 100 at first and doubles on demand.
+      const TOTAL = 600;
+      const growing = () => {
+        const load = vi.fn<LoadGraph>((_revs, limit) =>
+          Promise.resolve({rows: layoutGraph(linear(Math.min(limit, TOTAL))), refs}),
+        );
+        const rendered = render(<Browser initial={{rows: layoutGraph(linear(100)), refs}} initialLimit={100} load={load} />);
+        return {...rendered, load};
+      };
+      const settle = async () => {
+        for (let i = 0; i < 6; i++) await tick();
+      };
+
+      it('Enter with no match among the loaded commits keeps loading until it finds one', async () => {
+        const {stdin, lastFrame, load} = growing();
+        await press(stdin, 's', ...'commit 450'.split(''));
+        expect(lastFrame()).toContain('nenhum resultado carregado');
+        expect(lastFrame()).toContain('Enter procura no resto do histórico');
+        await press(stdin, '\r');
+        await settle();
+        // 100 -> 200 -> 400 -> 800 (600 exist).
+        expect(load.mock.calls.map(c => c[1])).toEqual([200, 400, 800]);
+        expect(lastFrame()).toContain('451/600');
+        expect(lastFrame()).toContain('busca "commit 450" 1/1');
+        expect(lastFrame()).not.toContain('procurando');
+      });
+
+      it('shows that it is searching, and Esc cancels it keeping the search', async () => {
+        const pending: (() => void)[] = [];
+        const load = vi.fn<LoadGraph>(
+          () =>
+            new Promise(resolve => {
+              pending.push(() => resolve({rows: layoutGraph(linear(200)), refs}));
+            }),
+        );
+        const {stdin, lastFrame} = render(
+          <Browser initial={{rows: layoutGraph(linear(100)), refs}} initialLimit={100} load={load} />,
+        );
+        await press(stdin, 's', ...'commit 450'.split(''), '\r');
+        expect(lastFrame()).toContain('procurando "commit 450" no histórico');
+        await press(stdin, '\u001B');
+        expect(lastFrame()).toContain('busca no histórico cancelada');
+        // The load that was already running ends without taking the cursor anywhere.
+        pending.forEach(resolve => resolve());
+        await settle();
+        expect(lastFrame()).toContain('1/200');
+        expect(load).toHaveBeenCalledTimes(1);
+      });
+
+      it('gives up after the whole history, saying so', async () => {
+        const {stdin, lastFrame, load} = growing();
+        await press(stdin, 's', ...'zzz'.split(''), '\r');
+        await settle();
+        expect(load.mock.calls.map(c => c[1])).toEqual([200, 400, 800]);
+        expect(lastFrame()).toContain('nenhum commit encontrado para "zzz" em todo o histórico');
+        expect(lastFrame()).not.toContain('busca "zzz"');
+      });
+
+      it('n at the last loaded match goes on searching instead of wrapping around', async () => {
+        const {stdin, lastFrame, load} = growing();
+        // Matches in the first 100: 5, 50..59. After 59 the next one, 500, is not loaded yet.
+        await press(stdin, 's', ...'commit 5'.split(''), '\r');
+        expect(lastFrame()).toContain('6/100');
+        for (let i = 0; i < 10; i++) await press(stdin, 'n');
+        expect(lastFrame()).toContain('60/100');
+        expect(load).not.toHaveBeenCalled();
+        await press(stdin, 'n');
+        await settle();
+        expect(lastFrame()).toContain('501/600');
+        expect(load.mock.calls.map(c => c[1])).toEqual([200, 400, 800]);
+      });
+
+      it('wraps around once the whole history is loaded', async () => {
+        const {stdin, lastFrame, load} = growing();
+        await press(stdin, 's', ...'commit 599'.split(''), '\r');
+        await settle();
+        expect(lastFrame()).toContain('600/600');
+        load.mockClear();
+        // 599 is the only match and the list is complete: n comes back to it, saying so.
+        await press(stdin, 'n');
+        await settle();
+        expect(load).not.toHaveBeenCalled();
+        expect(lastFrame()).toContain('a busca recomeçou do outro lado');
+      });
+
+      it('with a -n ceiling there is nothing more to load, so Enter reports it right away', async () => {
+        const load = vi.fn<LoadGraph>();
+        const {stdin, lastFrame} = render(
+          <Browser initial={{rows: layoutGraph(linear(100)), refs}} initialLimit={100} maxCommits={100} load={load} />,
+        );
+        await press(stdin, 's', ...'commit 450'.split(''), '\r');
+        expect(lastFrame()).toContain('nenhum commit encontrado para "commit 450"');
+        expect(load).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not take keys such as q or j as commands while typing', async () => {
       const {lastFrame, stdin} = open();
       await typeQuery(stdin, 'qj');

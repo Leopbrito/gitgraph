@@ -138,6 +138,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   // Active search (highlight, n/N); `typing` is set while the input is open.
   const [query, setQuery] = useState('');
   const [typing, setTyping] = useState<{origin: number; previous: string} | null>(null);
+  // Looking for a match past what is loaded: the list grows until one beyond `after` shows up or the history ends.
+  const [seeking, setSeeking] = useState<{after: number} | null>(null);
   const request = useRef(0);
   const isDoubleClick = useDoubleClick();
 
@@ -203,6 +205,31 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       reload(revs, next, false);
     }
   }, [loading, error, canGrow, total, limit, maxCommits, cursor.selected, revs, reload]);
+
+  useEffect(() => {
+    if (!seeking || loading) return;
+    if (error) return setSeeking(null);
+    const found = matches.find(i => i > seeking.after);
+    if (found !== undefined) {
+      setSeeking(null);
+      select(found);
+    } else if (canGrow && total >= limit) {
+      const next = Math.min(limit * 2, maxCommits ?? Infinity);
+      setLimit(next);
+      reload(revs, next, false);
+    } else {
+      // The whole history was searched: wrap to the first match, or give up.
+      setSeeking(null);
+      const first = matches[0];
+      if (first !== undefined) {
+        select(first);
+        setNotice('fim do histórico: a busca recomeçou do início');
+      } else {
+        setNotice(`nenhum commit encontrado para "${query.trim()}" em todo o histórico`);
+        setQuery('');
+      }
+    }
+  }, [seeking, loading, error, matches, canGrow, total, limit, maxCommits, revs, reload]);
 
   const select = (index: number) => {
     const selected = clamp(index, 0, Math.max(0, total - 1));
@@ -529,8 +556,13 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       } else if (key.return) {
         setTyping(null);
         if (query.trim() !== '' && matches.length === 0) {
-          setNotice(`nenhum commit encontrado para "${query.trim()}"`);
-          setQuery('');
+          if (more) {
+            // Nothing among the loaded commits, but there is more history: keep looking.
+            setSeeking({after: typing.origin - 1});
+          } else {
+            setNotice(`nenhum commit encontrado para "${query.trim()}"`);
+            setQuery('');
+          }
         }
       } else if (key.backspace || key.delete) {
         update(query.slice(0, -1));
@@ -626,9 +658,17 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       setQuery('');
     }
     else if (input === 'n' || input === 'N') {
-      const found = nextMatch(matches, cursor.selected, input === 'n' ? 1 : -1);
-      if (found !== null) select(found);
-      else setNotice(query === '' ? 'nenhuma busca: aperte s para buscar' : 'nenhum resultado na busca');
+      const forward = input === 'n';
+      const found = nextMatch(matches, cursor.selected, forward ? 1 : -1);
+      if (found === null) {
+        setNotice(query === '' ? 'nenhuma busca: aperte s para buscar' : 'nenhum resultado na busca');
+      } else if (forward && found <= cursor.selected && more) {
+        // Past the last loaded match, with more history to load: search on instead of wrapping around.
+        setSeeking({after: cursor.selected});
+      } else {
+        select(found);
+        if (forward ? found <= cursor.selected : found >= cursor.selected) setNotice('a busca recomeçou do outro lado');
+      }
     }
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
     else if (input === 'm' && !loading) {
@@ -659,8 +699,13 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       }
     }
     else if (key.escape) {
-      setError(null);
-      setQuery('');
+      if (seeking) {
+        setSeeking(null);
+        setNotice('busca no histórico cancelada');
+      } else {
+        setError(null);
+        setQuery('');
+      }
     }
   });
 
@@ -696,6 +741,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         ? confirmHint(1)
       : conflict
         ? `a aborta ${dot} d/Esc deixa em andamento ${dot} ${arrows}/Enter escolhe`
+        : seeking
+          ? `procurando "${query.trim()}" no histórico${display.ascii ? '...' : '…'} ${dot} Esc cancela`
         : typing
           ? `digite para buscar ${dot} Enter confirma ${dot} Esc cancela`
         : picker
