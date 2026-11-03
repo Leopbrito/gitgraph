@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {formatRefs, headLabel} from '../../src/ui/format.js';
 
 describe('formatRefs', () => {
-  it('põe HEAD primeiro e não repete a branch atual', () => {
+  it('puts HEAD first and does not repeat the current branch', () => {
     const labels = formatRefs(
       [
         {name: 'v1', kind: 'tag'},
@@ -20,11 +20,11 @@ describe('formatRefs', () => {
     ]);
   });
 
-  it('mostra só HEAD quando destacado', () => {
+  it('shows only HEAD when detached', () => {
     expect(formatRefs([], {isHead: true, branch: null}).map(l => l.text)).toEqual(['HEAD']);
   });
 
-  it('não mostra HEAD em outros commits', () => {
+  it('does not show HEAD on other commits', () => {
     const labels = formatRefs([{name: 'main', kind: 'branch'}], {isHead: false, branch: 'main'});
     expect(labels.map(l => l.text)).toEqual(['main']);
   });
@@ -50,19 +50,19 @@ describe('headLabel', () => {
   });
 
   it('names the commit when HEAD is detached', () => {
-    expect(headLabel({hash: 'abcdef1234', branch: null})).toBe('HEAD destacado em abcdef1');
+    expect(headLabel({hash: 'abcdef1234', branch: null})).toBe('detached HEAD at abcdef1');
   });
 
   it('says when there are no commits', () => {
-    expect(headLabel({hash: null, branch: null})).toBe('sem commits');
+    expect(headLabel({hash: null, branch: null})).toBe('no commits');
     // An unborn branch still has a name.
     expect(headLabel({hash: null, branch: 'main'})).toBe('main');
   });
 
   it('flags a merge in progress', () => {
-    expect(headLabel({hash: 'abc', branch: 'main', merging: true})).toBe('main (merge em andamento)');
+    expect(headLabel({hash: 'abc', branch: 'main', merging: true})).toBe('main (merge in progress)');
     expect(headLabel({hash: 'abcdef1234', branch: null, merging: true})).toBe(
-      'HEAD destacado em abcdef1 (merge em andamento)',
+      'detached HEAD at abcdef1 (merge in progress)',
     );
     expect(headLabel({hash: 'abc', branch: 'main', merging: false})).toBe('main');
   });
@@ -79,7 +79,7 @@ describe('headLabel upstream', () => {
   it('uses ASCII arrows when asked and keeps the merge note last', () => {
     expect(headLabel({hash: 'abc', branch: 'main', upstream: {ahead: 2, behind: 3}}, {ascii: true})).toBe('main ^2 v3');
     expect(headLabel({hash: 'abc', branch: 'main', merging: true, upstream: {ahead: 1, behind: 0}})).toBe(
-      'main ↑1 (merge em andamento)',
+      'main ↑1 (merge in progress)',
     );
   });
 });

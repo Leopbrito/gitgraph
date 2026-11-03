@@ -65,8 +65,8 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
 
   const submitName = (value: string, target?: RefTarget) => {
     const name = value.trim();
-    if (name === '') return setError('digite um nome');
-    if (target && name === target.name) return setError('esse já é o nome atual');
+    if (name === '') return setError('type a name');
+    if (target && name === target.name) return setError('that is already the current name');
     const kind = target?.kind ?? (mode === 'branch' ? 'branch' : 'tag');
     setBusy(true);
     setError(null);
@@ -83,11 +83,11 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
           run(async () => {
             if (target) {
               await (kind === 'branch' ? actions.renameBranch(target.name, name) : actions.renameTag(target.name, name));
-              return `${describeTarget(target)} renomeada para ${name}`;
+              return `${describeTarget(target)} renamed to ${name}`;
             }
             if (kind === 'branch') await actions.createBranch(name, commit.hash);
             else await actions.createTag(name, commit.hash);
-            return `${kind === 'branch' ? 'branch' : 'tag'} ${name} criada em ${short}`;
+            return `${kind === 'branch' ? 'branch' : 'tag'} ${name} created at ${short}`;
           });
         }
       })
@@ -102,7 +102,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
       async () => {
         if (target.kind === 'tag') await actions.deleteTag(target.name);
         else await actions.deleteBranch(target.name, false);
-        return `${describeTarget(target)} apagada`;
+        return `${describeTarget(target)} deleted`;
       },
       e => {
         if (!(e instanceof UnmergedBranchError)) return false;
@@ -148,19 +148,19 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
     else if (key.return) {
       if (step.type === 'name') submitName(step.value, step.target);
       else if (step.type === 'message') {
-        if (step.value.trim() === '') setError('digite a mensagem da tag');
-        else run(async () => (await actions.createTag(step.name, commit.hash, step.value.trim()), `tag ${step.name} criada em ${short}`));
-      } else if (step.value !== step.target.name) setError(`digite exatamente ${step.target.name} para confirmar`);
-      else run(async () => (await actions.deleteBranch(step.target.name, true), `${describeTarget(step.target)} apagada`));
+        if (step.value.trim() === '') setError('type the tag message');
+        else run(async () => (await actions.createTag(step.name, commit.hash, step.value.trim()), `tag ${step.name} created at ${short}`));
+      } else if (step.value !== step.target.name) setError(`type exactly ${step.target.name} to confirm`);
+      else run(async () => (await actions.deleteBranch(step.target.name, true), `${describeTarget(step.target)} deleted`));
     } else if (input && !key.ctrl && !key.meta && !key.tab) edit(step.value + input);
   });
 
   const title = {
-    branch: `Nova branch em ${short}`,
-    tag: `Nova tag em ${short}`,
-    annotated: `Nova tag anotada em ${short}`,
-    rename: 'Renomear',
-    delete: 'Apagar',
+    branch: `New branch at ${short}`,
+    tag: `New tag at ${short}`,
+    annotated: `New annotated tag at ${short}`,
+    rename: 'Rename',
+    delete: 'Delete',
   }[mode];
 
   const field = (label: string, value: string) => (
@@ -168,7 +168,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
       <Text bold>{label}</Text>
       {value}
       <Text inverse> </Text>
-      {busy && <Text dimColor>{`  aguarde${ellipsis(display)}`}</Text>}
+      {busy && <Text dimColor>{`  wait${ellipsis(display)}`}</Text>}
     </Text>
   );
   const problem = error && (
@@ -182,7 +182,7 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
     <Box flexDirection="column" height={DETAIL_LINES}>
       {step.type === 'choose' && (
         <>
-          <Text bold wrap="truncate-end">{`${title} qual ref de ${short}?`}</Text>
+          <Text bold wrap="truncate-end">{`${title} which ref of ${short}?`}</Text>
           {(() => {
             const size = DETAIL_LINES - 1;
             const start = centerWindow(step.targets.length, step.index, size);
@@ -200,31 +200,31 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
       {step.type === 'name' && (
         <>
           <Text bold wrap="truncate-end">{step.target ? `${title} ${describeTarget(step.target)}` : title}</Text>
-          {field(step.target ? 'Novo nome: ' : 'Nome: ', step.value)}
-          {problem || <Text dimColor>{`Enter confirma ${dot} Esc cancela`}</Text>}
-          {mode === 'annotated' ? <Text dimColor>Em seguida, a mensagem da tag.</Text> : blank}
+          {field(step.target ? 'New name: ' : 'Name: ', step.value)}
+          {problem || <Text dimColor>{`Enter confirms ${dot} Esc cancels`}</Text>}
+          {mode === 'annotated' ? <Text dimColor>Next, the tag message.</Text> : blank}
           {blank}
         </>
       )}
       {step.type === 'message' && (
         <>
-          <Text bold wrap="truncate-end">{`Tag anotada ${step.name}`}</Text>
-          {field('Mensagem: ', step.value)}
-          {problem || <Text dimColor>{`Enter cria ${dot} Esc cancela`}</Text>}
+          <Text bold wrap="truncate-end">{`Annotated tag ${step.name}`}</Text>
+          {field('Message: ', step.value)}
+          {problem || <Text dimColor>{`Enter creates ${dot} Esc cancels`}</Text>}
           {blank}
           {blank}
         </>
       )}
       {step.type === 'confirm' && (
         <>
-          <Text bold wrap="truncate-end" color={tint(display, 'red')}>{`Apagar ${describeTarget(step.target)}?`}</Text>
+          <Text bold wrap="truncate-end" color={tint(display, 'red')}>{`Delete ${describeTarget(step.target)}?`}</Text>
           <Text dimColor wrap="truncate-end">
             {step.target.kind === 'tag'
-              ? 'Só a tag some; o commit e as outras refs continuam.'
-              : 'Só a branch some; se ela tiver commits que nenhuma outra ref tem, o git recusa e pede outra confirmação.'}
+              ? 'Only the tag goes away; the commit and the other refs stay.'
+              : 'Only the branch goes away; if it has commits no other ref has, git refuses and asks for another confirmation.'}
           </Text>
           {problem || blank}
-          <Text dimColor>{`Enter/y confirma ${dot} Esc/n cancela`}</Text>
+          <Text dimColor>{`Enter/y confirms ${dot} Esc/n cancels`}</Text>
           {blank}
         </>
       )}
@@ -232,13 +232,13 @@ export function RefManager({mode, commit, refs, currentBranch, actions, onDone, 
         <>
           <Text bold wrap="truncate-end" color={tint(display, 'red')}>
             {step.lost === null
-              ? `${step.target.name} não foi mesclada: apagar perde os commits que só ela tem (não deu para contar)`
-              : `${step.target.name} não foi mesclada: apagar perde ${step.lost} ${step.lost === 1 ? 'commit' : 'commits'}`}
+              ? `${step.target.name} is not merged: deleting loses the commits only it has (could not count)`
+              : `${step.target.name} is not merged: deleting loses ${step.lost} ${step.lost === 1 ? 'commit' : 'commits'}`}
           </Text>
           <Text dimColor wrap="truncate-end">
-            Esses commits só ficam acessíveis pelo reflog por um tempo. Para forçar (git branch -D), digite o nome:
+            Those commits stay reachable only through the reflog for a while. To force it (git branch -D), type the name:
           </Text>
-          {field('Nome: ', step.value)}
+          {field('Name: ', step.value)}
           {problem || blank}
           {blank}
         </>

@@ -150,18 +150,18 @@ describe('isCurrent and describeTarget', () => {
 
   it('describes pull and unsynced options', () => {
     const pull: CheckoutTarget = {kind: 'pull', name: 'main', remote: 'origin'};
-    expect(describeOption(pull)).toBe('main e avançar até origin/main');
-    expect(describeTarget(pull)).toBe('main (atualizada de origin/main)');
-    expect(describeOption({kind: 'branch', name: 'main', unsynced: true})).toBe('main (sem avançar)');
+    expect(describeOption(pull)).toBe('main and advance to origin/main');
+    expect(describeTarget(pull)).toBe('main (updated from origin/main)');
+    expect(describeOption({kind: 'branch', name: 'main', unsynced: true})).toBe('main (no advance)');
     expect(describeOption({kind: 'branch', name: 'main'})).toBe('main');
     expect(describeOption({kind: 'detach', hash: 'abcdef1234'})).toBe(
-      'abcdef1 (HEAD destacado neste commit)',
+      'abcdef1 (detached HEAD at this commit)',
     );
   });
 
   it('describes targets for the prompt', () => {
     expect(describeTarget({kind: 'branch', name: 'main'})).toBe('main');
-    expect(describeTarget({kind: 'detach', hash: 'abcdef1234'})).toBe('abcdef1 (HEAD destacado)');
+    expect(describeTarget({kind: 'detach', hash: 'abcdef1234'})).toBe('abcdef1 (detached HEAD)');
   });
 });
 
@@ -309,7 +309,7 @@ describe('checkout with pull', () => {
 
     const failure = checkout(dir, pull);
     await expect(failure).rejects.toBeInstanceOf(PartialCheckoutError);
-    await expect(failure).rejects.toThrow(/checkout feito para main, mas não deu para avançar até origin\/main.*fast-forward/s);
+    await expect(failure).rejects.toThrow(/checked out main, but could not advance to origin\/main.*fast-forward/s);
     // The switch happened; nothing was merged or rebased.
     expect(run('branch', '--show-current')).toBe('main');
     expect(run('rev-parse', 'HEAD')).toBe(localTip);

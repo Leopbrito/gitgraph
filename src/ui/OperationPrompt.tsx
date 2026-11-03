@@ -16,10 +16,10 @@ export interface OperationOption {
 /** What can be done with an operation that is stopped; `skip` only exists for the ones that have steps. */
 export function operationOptions(op: Operation): OperationOption[] {
   return [
-    {choice: 'abort', key: 'a', label: `Abortar o ${op} (git ${op} --abort)`},
-    {choice: 'proceed', key: 'c', label: `Continuar (git ${op} --continue), depois de resolver os conflitos`},
-    ...(canSkip(op) ? [{choice: 'skip', key: 's', label: `Pular este passo (git ${op} --skip)`} as const] : []),
-    {choice: 'leave', key: 'd', label: 'Deixar em andamento (resolva no terminal)'},
+    {choice: 'abort', key: 'a', label: `Abort the ${op} (git ${op} --abort)`},
+    {choice: 'proceed', key: 'c', label: `Continue (git ${op} --continue), after resolving the conflicts`},
+    ...(canSkip(op) ? [{choice: 'skip', key: 's', label: `Skip this step (git ${op} --skip)`} as const] : []),
+    {choice: 'leave', key: 'd', label: 'Leave it in progress (resolve it in the terminal)'},
   ];
 }
 
@@ -38,8 +38,8 @@ export function OperationPrompt({operation, files, index}: Props) {
   const listed = files.slice(0, SHOWN_FILES).join(', ') + (files.length > SHOWN_FILES ? ` +${files.length - SHOWN_FILES}` : '');
   const title =
     files.length > 0
-      ? `${operation} com conflitos (${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}): ${listed}`
-      : `${operation} em andamento: sem conflitos pendentes`;
+      ? `${operation} with conflicts (${files.length} ${files.length === 1 ? 'file' : 'files'}): ${listed}`
+      : `${operation} in progress: no conflicts left`;
   return (
     <Box flexDirection="column" height={DETAIL_LINES}>
       <Text bold color={tint(display, files.length > 0 ? 'red' : 'yellow')} wrap="truncate-end">

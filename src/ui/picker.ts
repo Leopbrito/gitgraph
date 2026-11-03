@@ -1,14 +1,14 @@
 import type {RefInfo} from '../git/refs.js';
 
-export const ALL_LABEL = '(todas as branches)';
+export const ALL_LABEL = '(all branches)';
 
 export interface PickerOption {
   label: string;
-  /** Revisão passada ao git; null significa todas as branches. */
+  /** Revision passed to git; null means all branches. */
   rev: string | null;
 }
 
-/** Branches locais e remotas, sem repetição e em ordem alfabética. */
+/** Local and remote branches, without repeats and in alphabetical order. */
 export function branchNames(refs: RefInfo): string[] {
   const names = new Set<string>();
   for (const list of refs.byCommit.values()) {
@@ -19,7 +19,7 @@ export function branchNames(refs: RefInfo): string[] {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-/** Opções do seletor: "todas" aparece só sem filtro; o filtro ignora maiúsculas. */
+/** Picker options: "all" only shows without a filter; the filter ignores case. */
 export function pickerOptions(names: string[], query: string): PickerOption[] {
   const needle = query.trim().toLowerCase();
   if (needle === '') {

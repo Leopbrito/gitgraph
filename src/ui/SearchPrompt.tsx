@@ -15,19 +15,19 @@ export function SearchPrompt({query, count, more}: Props) {
   return (
     <Box flexDirection="column" height={DETAIL_LINES}>
       <Text wrap="truncate-end">
-        <Text bold>Buscar: </Text>
+        <Text bold>Search: </Text>
         {query}
         <Text inverse> </Text>
         {query.trim() !== '' && (
           <Text dimColor>
-            {`  ${count === 0 ? (more ? 'nenhum resultado carregado' : 'nenhum resultado') : `${count}${more ? '+' : ''} ${count === 1 ? 'resultado' : 'resultados'}`}`}
+            {`  ${count === 0 ? (more ? 'no loaded results' : 'no results') : `${count}${more ? '+' : ''} ${count === 1 ? 'result' : 'results'}`}`}
           </Text>
         )}
       </Text>
       <Text dimColor wrap="truncate-end">
         {query.trim() !== '' && count === 0 && more
-          ? 'Enter procura no resto do histórico, carregando mais commits.'
-          : 'Mensagem, autor, e-mail ou hash, sem diferenciar maiúsculas.'}
+          ? 'Enter searches the rest of the history, loading more commits.'
+          : 'Message, author, e-mail or hash, case-insensitive.'}
       </Text>
       <Text> </Text>
       <Text> </Text>

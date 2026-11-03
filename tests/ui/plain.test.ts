@@ -9,7 +9,7 @@ const c = (hash: string, subject: string, ...parents: string[]): Commit => ({
 });
 
 describe('formatPlain', () => {
-  it('alinha o texto, mostra refs e inclui linhas de ligação', () => {
+  it('aligns the text, shows refs and includes connector lines', () => {
     const rows = layoutGraph([
       c('1111111aaa', 'merge', '2222222bbb', '3333333ccc'),
       c('2222222bbb', 'main'),
@@ -28,7 +28,7 @@ describe('formatPlain', () => {
     ]);
   });
 
-  it('usa só ASCII com ascii: true', () => {
+  it('uses only ASCII with ascii: true', () => {
     const rows = layoutGraph([
       c('1111111aaa', 'merge', '2222222bbb', '3333333ccc'),
       c('2222222bbb', 'main'),
@@ -74,20 +74,20 @@ describe('formatPlain dates', () => {
   it('keeps the short date by default and follows the style', () => {
     expect(formatPlain(rows, refs)[0]).toContain('Ana, 2026-03-04');
     expect(formatPlain(rows, refs, {date: 'iso'})[0]).toContain('Ana, 2026-03-04 10:00');
-    expect(formatPlain(rows, refs, {date: 'relative', now: new Date('2026-03-07T10:00:00Z')})[0]).toContain('Ana, há 3 dias');
+    expect(formatPlain(rows, refs, {date: 'relative', now: new Date('2026-03-07T10:00:00Z')})[0]).toContain('Ana, 3 days ago');
   });
 });
 
 describe('formatPlain uncommitted node', () => {
   it('prints working and the counts, without hash, author or date', () => {
     const node: Commit = {
-      ...c('uncommitted', 'Alterações não commitadas (1 modificado)', 'aaaaaaa1'),
+      ...c('uncommitted', 'Uncommitted changes (1 modified)', 'aaaaaaa1'),
       uncommitted: {staged: 0, modified: 1, untracked: 0, conflicted: 0},
     };
     const rows = layoutGraph([node, c('aaaaaaa1', 'one')]);
     const refs: RefInfo = {byCommit: new Map(), head: {hash: 'aaaaaaa1', branch: 'main', merging: false}};
     const lines = formatPlain(rows, refs);
-    expect(lines[0]).toBe('○  working Alterações não commitadas (1 modificado)');
+    expect(lines[0]).toBe('○  working Uncommitted changes (1 modified)');
     expect(lines[1]).toContain('aaaaaaa (HEAD -> main) one  Ana, 2026-03-04');
   });
 });

@@ -96,21 +96,21 @@ export function DiffView({commit, target, changes, onClose}: Props) {
   const arrows = arrowKeys(display);
   const position =
     total > 0 ? `${scroll + 1}-${Math.min(total, scroll + height)}/${total}${diff?.truncated ? '+' : ''}` : '';
-  const toggle = splittable ? ` ${dot} u ${mode === 'split' ? 'unificado' : 'lado a lado'}` : '';
-  const jump = mode === 'split' && starts.length > 0 ? ` ${dot} n/N muda` : '';
+  const toggle = splittable ? ` ${dot} u ${mode === 'split' ? 'unified' : 'side by side'}` : '';
+  const jump = mode === 'split' && starts.length > 0 ? ` ${dot} n/N next change` : '';
 
   let content: React.ReactNode;
   let header: React.ReactNode = <Text dimColor>{rule(display, columns)}</Text>;
   if (loaded.status === 'loading') {
-    content = <Text dimColor>{`carregando${ellipsis}`}</Text>;
+    content = <Text dimColor>{`loading${ellipsis}`}</Text>;
   } else if (loaded.status === 'error') {
-    content = <Text color={tint(display, 'red')}>{`erro: ${loaded.message}`}</Text>;
+    content = <Text color={tint(display, 'red')}>{`error: ${loaded.message}`}</Text>;
   } else if (total === 0) {
     content = (
       <Text dimColor>
         {mode === 'split'
-          ? 'Sem alterações de conteúdo (arquivo só renomeado ou com outro modo).'
-          : 'Sem diferenças para mostrar.'}
+          ? 'No content changes (file only renamed or with another mode).'
+          : 'No differences to show.'}
       </Text>
     );
   } else if (mode === 'split' && target) {
@@ -137,8 +137,8 @@ export function DiffView({commit, target, changes, onClose}: Props) {
       </Box>
       <Text wrap="truncate-end" dimColor>
         {diff?.truncated
-          ? `cortado em ${diff.lines.length} linhas ${dot} Esc volta ${dot} ${position}`
-          : `j/k ${arrows} rolar ${dot} PgUp/PgDn página ${dot} g/G início/fim${jump}${toggle} ${dot} Esc volta ${dot} ${position}`}
+          ? `cut at ${diff.lines.length} lines ${dot} Esc back ${dot} ${position}`
+          : `j/k ${arrows} scroll ${dot} PgUp/PgDn page ${dot} g/G start/end${jump}${toggle} ${dot} Esc back ${dot} ${position}`}
       </Text>
     </Box>
   );
@@ -167,8 +167,8 @@ function splitLayout(rows: SideRow[], columns: number, ascii: boolean): Layout {
 const fit = (text: string, width: number) => text.slice(0, Math.max(0, width)).padEnd(Math.max(0, width));
 
 function SplitHeader({target, layout}: {target: ChangedFile; layout: Layout}) {
-  const before = target.status === 'A' ? 'antes: (não existia)' : `antes: ${target.oldPath ?? target.path}`;
-  const after = target.status === 'D' ? 'depois: (removido)' : `depois: ${target.path}`;
+  const before = target.status === 'A' ? 'before: (did not exist)' : `before: ${target.oldPath ?? target.path}`;
+  const after = target.status === 'D' ? 'after: (removed)' : `after: ${target.path}`;
   return (
     <Text wrap="truncate-end" dimColor bold>
       {`${fit(before, layout.leftWidth)}${layout.divider}${fit(after, layout.rightWidth)}`}

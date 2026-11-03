@@ -28,14 +28,14 @@ export function parseStatus(text: string): WorkingTree {
 
 export const isClean = (t: WorkingTree) => t.staged + t.modified + t.untracked + t.conflicted === 0;
 
-/** "2 staged, 3 modificados, 1 não rastreado". */
+/** "2 staged, 3 modified, 1 untracked". */
 export function describeWorkingTree(t: WorkingTree): string {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return [
     t.staged > 0 && `${t.staged} staged`,
-    t.modified > 0 && plural(t.modified, 'modificado', 'modificados'),
-    t.untracked > 0 && plural(t.untracked, 'não rastreado', 'não rastreados'),
-    t.conflicted > 0 && plural(t.conflicted, 'em conflito', 'em conflito'),
+    t.modified > 0 && plural(t.modified, 'modified', 'modified'),
+    t.untracked > 0 && plural(t.untracked, 'untracked', 'untracked'),
+    t.conflicted > 0 && plural(t.conflicted, 'conflicted', 'conflicted'),
   ]
     .filter(Boolean)
     .join(', ');
@@ -59,7 +59,7 @@ export function uncommittedNode(tree: WorkingTree, head: string): Commit {
     author: '',
     email: '',
     date: new Date().toISOString(),
-    subject: `Alterações não commitadas (${describeWorkingTree(tree)})`,
+    subject: `Uncommitted changes (${describeWorkingTree(tree)})`,
     body: '',
     uncommitted: tree,
   };

@@ -41,17 +41,17 @@ describe('ResetPrompt', () => {
     const {lastFrame} = open();
     await tick();
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('Reset de main para abc1234: 3 commits saem da branch, 1 só no reflog');
+    expect(frame).toContain('Reset main to abc1234: 3 commits leave the branch, 1 only in the reflog');
     expect(frame).toContain('--soft');
     expect(frame).toContain('--mixed');
     expect(frame).toContain('--hard');
-    expect(frame).toContain('descarta os arquivos modificados (2 arquivos modificados)');
+    expect(frame).toContain('discards the modified files (2 modified files)');
   });
 
   it('works without the preview', async () => {
     const {lastFrame, stdin, reset} = open(new Error('boom'));
     await tick();
-    expect(lastFrame()).toContain('calculando…');
+    expect(lastFrame()).toContain('calculating…');
     await press(stdin, '\r', 'y');
     expect(reset).toHaveBeenCalledWith('soft', 'abc1234def');
   });
@@ -68,7 +68,7 @@ describe('ResetPrompt', () => {
     await press(stdin, 'y');
     await tick();
     expect(reset).toHaveBeenCalledWith(mode, 'abc1234def');
-    expect(onDone).toHaveBeenCalledWith(`reset --${mode}: main agora em abc1234`);
+    expect(onDone).toHaveBeenCalledWith(`reset --${mode}: main now at abc1234`);
   });
 
   it('n cancels the confirmation', async () => {
@@ -83,27 +83,27 @@ describe('ResetPrompt', () => {
     const {lastFrame, stdin, reset, onDone} = open();
     await tick();
     await press(stdin, 'j', 'j', '\r');
-    expect(lastFrame()).toContain('reset --hard perde 2 arquivos modificados e 3 commits saem da branch, 1 só no reflog');
-    expect(lastFrame()).toContain('Digite main para confirmar');
+    expect(lastFrame()).toContain('reset --hard loses 2 modified files and 3 commits leave the branch, 1 only in the reflog');
+    expect(lastFrame()).toContain('Type main to confirm');
     // Enter without the name, and with a wrong one, does nothing.
     await press(stdin, '\r');
-    expect(lastFrame()).toContain('digite exatamente main para confirmar');
+    expect(lastFrame()).toContain('type exactly main to confirm');
     await press(stdin, 'm', 'a', 'i');
     await press(stdin, '\r');
     expect(reset).not.toHaveBeenCalled();
     await press(stdin, 'n', '\r');
     await tick();
     expect(reset).toHaveBeenCalledWith('hard', 'abc1234def');
-    expect(onDone).toHaveBeenCalledWith('reset --hard: main agora em abc1234');
+    expect(onDone).toHaveBeenCalledWith('reset --hard: main now at abc1234');
   });
 
-  it('with a detached HEAD the word to type is "descartar"', async () => {
+  it('with a detached HEAD the word to type is "discard"', async () => {
     const {lastFrame, stdin, reset} = open(undefined, null);
     await tick();
-    expect(lastFrame()).toContain('Reset de HEAD para abc1234');
+    expect(lastFrame()).toContain('Reset HEAD to abc1234');
     await press(stdin, 'j', 'j', '\r');
-    expect(lastFrame()).toContain('Digite descartar para confirmar');
-    for (const letter of 'descartar') await press(stdin, letter);
+    expect(lastFrame()).toContain('Type discard to confirm');
+    for (const letter of 'discard') await press(stdin, letter);
     await press(stdin, '\r');
     await tick();
     expect(reset).toHaveBeenCalledWith('hard', 'abc1234def');

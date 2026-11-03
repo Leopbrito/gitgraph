@@ -12,7 +12,7 @@ interface Props {
   selected: string[];
 }
 
-/** Seletor de branch; ocupa o lugar do painel de detalhes. */
+/** Branch picker; takes the place of the details panel. */
 export function BranchPicker({query, options, index, selected}: Props) {
   const size = DETAIL_LINES - 1;
   const start = centerWindow(options.length, index, size);
@@ -24,11 +24,11 @@ export function BranchPicker({query, options, index, selected}: Props) {
         {query}
         <Text inverse> </Text>
         {selected.length > 0 && (
-          <Text dimColor>{`  ${selected.length} ${selected.length === 1 ? 'marcada' : 'marcadas'}`}</Text>
+          <Text dimColor>{`  ${selected.length} ${selected.length === 1 ? 'marked' : 'marked'}`}</Text>
         )}
       </Text>
       {visible.length === 0 ? (
-        <Text dimColor>Nenhuma branch encontrada.</Text>
+        <Text dimColor>No branch found.</Text>
       ) : (
         visible.map((option, i) => {
           const active = start + i === index;

@@ -5,8 +5,8 @@ import {tint, useDisplay} from './display.js';
 
 /** The two things to do with a merge that is in progress. */
 export const CONFLICT_OPTIONS = [
-  'Abortar o merge (git merge --abort)',
-  'Deixar em andamento (resolva no terminal)',
+  'Abort the merge (git merge --abort)',
+  'Leave it in progress (resolve it in the terminal)',
 ] as const;
 
 interface Props {
@@ -27,8 +27,8 @@ export function ConflictPrompt({files, index}: Props) {
     <Box flexDirection="column" height={DETAIL_LINES}>
       <Text bold color={tint(display, 'red')} wrap="truncate-end">
         {files.length > 0
-          ? `Merge com conflitos (${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'})`
-          : 'Merge em andamento'}
+          ? `Merge with conflicts (${files.length} ${files.length === 1 ? 'file' : 'files'})`
+          : 'Merge in progress'}
       </Text>
       <Text dimColor wrap="truncate-end">
         {files.length > 0 ? `${listed}${more}` : ' '}

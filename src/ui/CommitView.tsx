@@ -154,8 +154,8 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
       <Text wrap="truncate-end" dimColor>
         {`${commit.author} <${commit.email}> ${dot} ${formatDate(commit.date, display.date ?? 'short', {detail: true})}`}
         {commit.parents.length > 0
-          ? ` ${dot} pais: ${commit.parents.map(p => p.slice(0, 7)).join(', ')}`
-          : ` ${dot} commit raiz`}
+          ? ` ${dot} parents: ${commit.parents.map(p => p.slice(0, 7)).join(', ')}`
+          : ` ${dot} root commit`}
       </Text>
       <Text wrap="truncate-end" bold>
         {commit.subject}
@@ -165,7 +165,7 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
         {body.length > 0 && (
           <>
             <Text wrap="truncate-end" bold={focus === 'message'} dimColor={focus !== 'message'}>
-              {`Mensagem${body.length > bodyHeight ? ` ${dot} ${bodyOffset + 1}-${bodyOffset + bodyHeight}/${body.length}` : ''}`}
+              {`Message${body.length > bodyHeight ? ` ${dot} ${bodyOffset + 1}-${bodyOffset + bodyHeight}/${body.length}` : ''}`}
             </Text>
             {body.slice(bodyOffset, bodyOffset + bodyHeight).map((line, i) => (
               <Text key={bodyOffset + i} wrap="truncate-end">
@@ -176,15 +176,15 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
         )}
         <Text wrap="truncate-end" bold={focus === 'files'} dimColor={focus !== 'files'}>
           {files
-            ? `Arquivos alterados (${fileCount})${fileCount > 0 ? ` ${dot} +${stats.added} -${stats.deleted}` : ''}${commit.parents.length > 1 ? ` ${dot} em relação ao 1º pai` : ''}`
-            : `Arquivos alterados`}
+            ? `Changed files (${fileCount})${fileCount > 0 ? ` ${dot} +${stats.added} -${stats.deleted}` : ''}${commit.parents.length > 1 ? ` ${dot} relative to the 1st parent` : ''}`
+            : `Changed files`}
         </Text>
         {error ? (
-          <Text color={tint(display, 'red')}>{`erro: ${error}`}</Text>
+          <Text color={tint(display, 'red')}>{`error: ${error}`}</Text>
         ) : !files ? (
-          <Text dimColor>{`carregando${ellipsis}`}</Text>
+          <Text dimColor>{`loading${ellipsis}`}</Text>
         ) : files.length === 0 ? (
-          <Text dimColor>Nenhum arquivo alterado.</Text>
+          <Text dimColor>No changed files.</Text>
         ) : (
           files
             .slice(fileOffset, fileOffset + filesHeight)
@@ -199,7 +199,7 @@ export function CommitView({commit, refs, head, changes, mouse, onClose}: Props)
         )}
       </Box>
       <Text wrap="truncate-end" dimColor>
-        {`Tab alterna ${dot} j/k ${arrows} mover ${dot} Enter ${focus === 'files' && fileCount > 0 ? 'diff do arquivo' : 'diff do commit'} ${dot} d diff do commit ${dot} Esc volta`}
+        {`Tab switches ${dot} j/k ${arrows} move ${dot} Enter ${focus === 'files' && fileCount > 0 ? 'file diff' : 'commit diff'} ${dot} d commit diff ${dot} Esc back`}
       </Text>
     </Box>
   );

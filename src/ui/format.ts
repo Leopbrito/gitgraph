@@ -6,13 +6,13 @@ export interface Label {
 }
 
 export interface HeadInfo {
-  /** O commit é o HEAD atual. */
+  /** The commit is the current HEAD. */
   isHead: boolean;
-  /** Branch atual (null com HEAD destacado). */
+  /** Current branch (null with a detached HEAD). */
   branch: string | null;
 }
 
-/** Etiquetas de refs de um commit: HEAD primeiro, depois branches, remotos e tags. */
+/** Ref labels of a commit: HEAD first, then branches, remotes and tags. */
 export function formatRefs(refs: Ref[], head: HeadInfo): Label[] {
   const labels: Label[] = [];
   if (head.isHead) {
@@ -51,11 +51,11 @@ export function headLabel(
   },
   {ascii = false}: {ascii?: boolean} = {},
 ): string {
-  const where = head.branch ?? (head.hash ? `HEAD destacado em ${head.hash.slice(0, 7)}` : 'sem commits');
+  const where = head.branch ?? (head.hash ? `detached HEAD at ${head.hash.slice(0, 7)}` : 'no commits');
   const {ahead = 0, behind = 0} = head.upstream ?? {};
   const [up, down] = ascii ? ['^', 'v'] : ['↑', '↓'];
   const distance = [ahead > 0 && `${up}${ahead}`, behind > 0 && `${down}${behind}`].filter(Boolean).join(' ');
   const label = distance === '' ? where : `${where} ${distance}`;
   const operation = head.operation ?? (head.merging ? 'merge' : undefined);
-  return operation ? `${label} (${operation} em andamento)` : label;
+  return operation ? `${label} (${operation} in progress)` : label;
 }

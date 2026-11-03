@@ -40,8 +40,8 @@ describe('parseStatus', () => {
 
 describe('describeWorkingTree', () => {
   it('lists only the categories that have files, with the right plural', () => {
-    expect(describeWorkingTree({staged: 2, modified: 1, untracked: 3, conflicted: 0})).toBe('2 staged, 1 modificado, 3 não rastreados');
-    expect(describeWorkingTree({staged: 0, modified: 0, untracked: 1, conflicted: 2})).toBe('1 não rastreado, 2 em conflito');
+    expect(describeWorkingTree({staged: 2, modified: 1, untracked: 3, conflicted: 0})).toBe('2 staged, 1 modified, 3 untracked');
+    expect(describeWorkingTree({staged: 0, modified: 0, untracked: 1, conflicted: 2})).toBe('1 untracked, 2 conflicted');
   });
 });
 
@@ -65,7 +65,7 @@ describe('loadWorkingTree and loadCommits({uncommitted})', () => {
     const [node, head] = commits;
     expect(node?.hash).toBe(UNCOMMITTED_HASH);
     expect(node?.uncommitted).toEqual({staged: 0, modified: 1, untracked: 1, conflicted: 0});
-    expect(node?.subject).toBe('Alterações não commitadas (1 modificado, 1 não rastreado)');
+    expect(node?.subject).toBe('Uncommitted changes (1 modified, 1 untracked)');
     expect(node?.parents).toEqual([head?.hash]);
     expect(head?.subject).toBe('one');
     // Off by default.

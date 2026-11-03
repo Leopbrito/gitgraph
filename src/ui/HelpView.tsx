@@ -45,7 +45,7 @@ export function HelpView({onClose}: Props) {
   return (
     <Box flexDirection="column" height={terminalRows - 1}>
       <Text bold wrap="truncate-end">
-        {`gitgraph ${dot} ajuda`}
+        {`gitgraph ${dot} help`}
         {lines.length > height ? ` ${dot} ${offset + 1}-${Math.min(lines.length, offset + height)}/${lines.length}` : ''}
       </Text>
       <Text dimColor>{rule(display, columns)}</Text>
@@ -57,7 +57,7 @@ export function HelpView({onClose}: Props) {
         ))}
       </Box>
       <Text dimColor wrap="truncate-end">
-        {`j/k ${arrows} rola ${dot} ? / Esc / q fecha`}
+        {`j/k ${arrows} scroll ${dot} ? / Esc / q close`}
       </Text>
     </Box>
   );

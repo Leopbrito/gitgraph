@@ -1,15 +1,15 @@
 /**
- * Janela de linhas visíveis de uma lista cujos itens ocupam alturas
- * diferentes (um commit com linha de ligação ocupa 2 linhas).
+ * Window of visible lines of a list whose items take different heights
+ * (a commit with a connector line takes 2 lines).
  */
 
-/** Índice (exclusivo) do último item que cabe em `viewHeight` a partir de `offset`. */
+/** Index (exclusive) of the last item that fits in `viewHeight` from `offset`. */
 export function visibleEnd(heights: number[], offset: number, viewHeight: number): number {
   let used = 0;
   let i = offset;
   for (; i < heights.length; i++) {
     const h = heights[i] ?? 1;
-    // O primeiro item sempre aparece, mesmo que sozinho exceda a janela.
+    // The first item always shows, even if it alone exceeds the window.
     if (i > offset && used + h > viewHeight) break;
     used += h;
   }
@@ -33,7 +33,7 @@ export function itemAt(
   return null;
 }
 
-/** Menor deslocamento que mantém `selected` visível, partindo de `offset`. */
+/** Smallest offset that keeps `selected` visible, starting from `offset`. */
 export function scrollIntoView(
   heights: number[],
   offset: number,
@@ -50,7 +50,7 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
 
-/** Início de uma janela de `size` itens que mantém `index` perto do centro. */
+/** Start of a window of `size` items that keeps `index` near the center. */
 export function centerWindow(length: number, index: number, size: number): number {
   return clamp(index - Math.floor(size / 2), 0, Math.max(0, length - size));
 }

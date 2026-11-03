@@ -18,7 +18,7 @@ const refs: RefInfo = {
 };
 
 describe('branchNames', () => {
-  it('une locais e remotas, sem tags nem repetição, em ordem', () => {
+  it('joins local and remote branches, without tags or repeats, in order', () => {
     expect(branchNames(refs)).toEqual(['feature/x', 'main', 'origin/main']);
   });
 });
@@ -26,17 +26,17 @@ describe('branchNames', () => {
 describe('pickerOptions', () => {
   const names = ['feature/x', 'main', 'origin/main'];
 
-  it('sem filtro, começa com "todas"', () => {
+  it('without a filter, starts with "all"', () => {
     const options = pickerOptions(names, '');
     expect(options[0]).toEqual({label: ALL_LABEL, rev: null});
     expect(options).toHaveLength(4);
   });
 
-  it('filtra por trecho, ignorando maiúsculas', () => {
+  it('filters by fragment, ignoring case', () => {
     expect(pickerOptions(names, 'MAIN').map(o => o.rev)).toEqual(['main', 'origin/main']);
   });
 
-  it('devolve vazio sem correspondência', () => {
+  it('returns nothing without a match', () => {
     expect(pickerOptions(names, 'zzz')).toEqual([]);
   });
 });

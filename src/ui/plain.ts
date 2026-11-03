@@ -11,7 +11,7 @@ export interface PlainOptions {
   now?: Date;
 }
 
-/** Grafo em texto puro (sem cor nem quebra), para pipes e redirecionamentos. */
+/** The graph as plain text (no color, no wrapping), for pipes and redirects. */
 export function formatPlain(rows: GraphRow[], refs: RefInfo, options: PlainOptions = {}): string[] {
   const graphWidth = Math.max(1, ...rows.map(r => r.width));
   return rows.flatMap(row => plainLines(row, refs, graphWidth, options));

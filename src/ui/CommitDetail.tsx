@@ -6,7 +6,7 @@ import {separator, tint, useDisplay} from './display.js';
 import {describeWorkingTree} from '../git/status.js';
 import {formatRefs, type HeadInfo} from './format.js';
 
-/** Linhas fixas do painel, para o layout não pular ao trocar de commit. */
+/** Fixed lines of the panel, so the layout does not jump when changing commits. */
 export const DETAIL_LINES = 5;
 
 interface Props {
@@ -21,7 +21,7 @@ export function CommitDetail({commit, refs, head}: Props) {
   if (!commit) {
     return (
       <Box height={DETAIL_LINES}>
-        <Text dimColor>Nenhum commit para mostrar.</Text>
+        <Text dimColor>No commit to show.</Text>
       </Box>
     );
   }
@@ -30,14 +30,14 @@ export function CommitDetail({commit, refs, head}: Props) {
     return (
       <Box flexDirection="column" height={DETAIL_LINES}>
         <Text wrap="truncate-end" bold color={tint(display, 'yellow')}>
-          Alterações não commitadas
+          Uncommitted changes
         </Text>
         <Text wrap="truncate-end" dimColor>
-          {`sobre o HEAD${parent ? ` (${parent})` : ''}`}
+          {`on top of HEAD${parent ? ` (${parent})` : ''}`}
         </Text>
         <Text wrap="truncate-end">{describeWorkingTree(commit.uncommitted)}</Text>
         <Text wrap="truncate-end" dimColor>
-          Veja o conteúdo com git status e git diff; r recarrega depois de commitar.
+          See the content with git status and git diff; r reloads after committing.
         </Text>
         <Text> </Text>
       </Box>
@@ -57,7 +57,7 @@ export function CommitDetail({commit, refs, head}: Props) {
       </Text>
       <Text wrap="truncate-end" dimColor>
         {`${commit.author} <${commit.email}> ${dot} ${formatDate(commit.date, display.date ?? 'short', {detail: true})}`}
-        {parents ? ` ${dot} pais: ${parents}` : ` ${dot} commit raiz`}
+        {parents ? ` ${dot} parents: ${parents}` : ` ${dot} root commit`}
       </Text>
       <Text wrap="truncate-end" bold>
         {commit.subject}

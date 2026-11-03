@@ -74,19 +74,19 @@ async function press(stdin: {write: (s: string) => void}, ...keys: string[]) {
 }
 
 describe('Browser', () => {
-  it('mostra cabeçalho, commits e detalhes do primeiro commit', () => {
+  it('shows the header, the commits and the details of the first commit', () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('todas as branches');
+    expect(frame).toContain('all branches');
     expect(frame).toContain('1/5');
     expect(frame).toContain('commit 0');
     expect(frame).toContain('h000000');
     expect(frame).toContain('ana@example.com');
-    expect(frame).toContain('pais: h000001');
+    expect(frame).toContain('parents: h000001');
   });
 
-  it('move a seleção com j/k e mostra o detalhe do commit selecionado', async () => {
+  it('moves the selection with j/k and shows the detail of the selected commit', async () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, 'j', 'j');
@@ -96,25 +96,25 @@ describe('Browser', () => {
     expect(lastFrame()).toContain('2/5');
   });
 
-  it('G vai ao último commit e g volta ao primeiro; não passa dos limites', async () => {
+  it('G goes to the last commit and g back to the first; it does not pass the limits', async () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, 'G', 'j');
     expect(lastFrame()).toContain('5/5');
-    expect(lastFrame()).toContain('commit raiz');
+    expect(lastFrame()).toContain('root commit');
     await press(stdin, 'g', 'k');
     expect(lastFrame()).toContain('1/5');
   });
 
-  it('filtra por branch: abre o seletor, digita, confirma e recarrega', async () => {
+  it('filters by branch: opens the picker, types, confirms and reloads', async () => {
     const load = vi.fn<LoadGraph>().mockResolvedValue(data(2));
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, '/');
     expect(lastFrame()).toContain('Branch:');
-    expect(lastFrame()).toContain('(todas as branches)');
+    expect(lastFrame()).toContain('(all branches)');
     await press(stdin, 'f', 'e', 'a');
     expect(lastFrame()).toContain('feature');
-    expect(lastFrame()).not.toContain('(todas as branches)');
+    expect(lastFrame()).not.toContain('(all branches)');
     await press(stdin, '\r');
     await tick();
     expect(load).toHaveBeenCalledWith(['feature'], 100);
@@ -122,7 +122,7 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('Branch:');
   });
 
-  it('Esc cancela o seletor sem recarregar', async () => {
+  it('Esc cancels the picker without reloading', async () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, '/', 'm');
@@ -132,7 +132,7 @@ describe('Browser', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('busca mais histórico ao chegar perto do fim com a lista cheia', async () => {
+  it('loads more history near the end with a full list', async () => {
     const load = vi.fn<LoadGraph>().mockResolvedValue(data(60));
     const {lastFrame, stdin} = render(<Browser initial={data(30)} initialLimit={30} load={load} />);
     await press(stdin, 'G');
@@ -141,30 +141,30 @@ describe('Browser', () => {
     expect(lastFrame()).toContain('/60');
   });
 
-  it('não busca mais quando a lista não está cheia', async () => {
+  it('does not load more when the list is not full', async () => {
     const load = vi.fn<LoadGraph>();
     const {stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, 'G');
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('mostra o erro de carregamento no rodapé', async () => {
-    const load = vi.fn<LoadGraph>().mockRejectedValue(new Error('revisão inválida'));
+  it('shows the load error in the footer', async () => {
+    const load = vi.fn<LoadGraph>().mockRejectedValue(new Error('invalid revision'));
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     await press(stdin, '/', '\u001b[B', '\r');
     await tick();
-    expect(lastFrame()).toContain('erro: revisão inválida');
+    expect(lastFrame()).toContain('error: invalid revision');
   });
 
-  it('funciona sem commits', () => {
+  it('works without commits', () => {
     const load = vi.fn<LoadGraph>();
     const empty: GraphData = {rows: [], refs: {byCommit: new Map(), head: {hash: null, branch: 'main'}}};
     const {lastFrame} = render(<Browser initial={empty} initialLimit={100} load={load} />);
-    expect(lastFrame()).toContain('Nenhum commit');
+    expect(lastFrame()).toContain('No commit');
     expect(lastFrame()).toContain('0/0');
   });
 
-  it('marca a linha selecionada com > mesmo sem estilos', async () => {
+  it('marks the selected row with > even without styles', async () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
     const marked = () => (lastFrame() ?? '').split('\n').filter(l => /● >h0000/.test(l) || / >h0000/.test(l));
@@ -175,14 +175,14 @@ describe('Browser', () => {
     expect(marked().length).toBe(1);
   });
 
-  it('respeita o teto de commits (--max-count) e não busca além dele', async () => {
+  it('respects the commit ceiling (--max-count) and does not load past it', async () => {
     const load = vi.fn<LoadGraph>().mockResolvedValue(data(40));
     const {lastFrame, stdin} = render(
       <Browser initial={data(30)} initialLimit={30} maxCommits={40} load={load} />,
     );
     await press(stdin, 'G');
     await tick();
-    // 30 -> min(60, 40) = 40; ao atingir o teto, não pede mais.
+    // 30 -> min(60, 40) = 40; once the ceiling is reached, it asks for no more.
     expect(load).toHaveBeenCalledTimes(1);
     expect(load).toHaveBeenCalledWith([], 40);
     await press(stdin, 'G', 'k', 'G');
@@ -205,14 +205,14 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('31/31+');
   });
 
-  it('não busca nada quando o teto já foi atingido de início', async () => {
+  it('loads nothing when the ceiling was reached from the start', async () => {
     const load = vi.fn<LoadGraph>();
     const {stdin} = render(<Browser initial={data(30)} initialLimit={30} maxCommits={30} load={load} />);
     await press(stdin, 'G');
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('usa só ASCII nos textos de interface com ascii: true', () => {
+  it('uses only ASCII in the interface texts with ascii: true', () => {
     const load = vi.fn<LoadGraph>();
     const {lastFrame} = render(
       <DisplayContext.Provider value={{color: false, ascii: true, spaced: true}}>
@@ -221,7 +221,7 @@ describe('Browser', () => {
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('Up/Down');
-    expect(frame).toContain('gitgraph | atual: main | todas as branches | 1/5');
+    expect(frame).toContain('gitgraph | current: main | all branches | 1/5');
     expect(frame).toContain('*');
     expect(frame).not.toMatch(/[●│─·↑↓]/);
   });
@@ -264,8 +264,8 @@ describe('Browser', () => {
         <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
       );
       await press(stdin, 'j', 'j', 'c');
-      expect(lastFrame()).toContain('Checkout para feature?');
-      expect(lastFrame()).toContain('Enter/y confirma');
+      expect(lastFrame()).toContain('Check out feature?');
+      expect(lastFrame()).toContain('Enter/y confirms');
       expect(checkout).not.toHaveBeenCalled();
 
       await press(stdin, '\r');
@@ -274,8 +274,8 @@ describe('Browser', () => {
       // Refs are reloaded, so the HEAD marker moves and a notice is shown.
       expect(load).toHaveBeenCalledWith([], 100);
       expect(lastFrame()).toContain('HEAD -> feature');
-      expect(lastFrame()).toContain('agora em feature');
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).toContain('now on feature');
+      expect(lastFrame()).not.toContain('Check out');
     });
 
     it('keeps the cursor on the same commit when the reload shifts the rows', async () => {
@@ -300,12 +300,12 @@ describe('Browser', () => {
       const load = vi.fn<LoadGraph>(() => new Promise(() => {}));
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
       await press(stdin, 'r');
-      expect(lastFrame()).toContain('carregando');
+      expect(lastFrame()).toContain('loading');
       await press(stdin, 'j', 'c');
-      expect(lastFrame()).toContain('espere a carga terminar');
+      expect(lastFrame()).toContain('wait for the load to finish');
       await press(stdin, 'j', 'm');
-      expect(lastFrame()).toContain('espere a carga terminar');
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).toContain('wait for the load to finish');
+      expect(lastFrame()).not.toContain('Check out');
     });
 
     it('stays busy until the checkout itself finishes, even if an earlier reload ends first', async () => {
@@ -323,8 +323,8 @@ describe('Browser', () => {
       await tick();
       // The reload is done but the checkout is not: keys that start git work must still wait.
       await press(stdin, 'k', 'c');
-      expect(lastFrame()).not.toContain('Checkout para');
-      expect(lastFrame()).toContain('carregando');
+      expect(lastFrame()).not.toContain('Check out');
+      expect(lastFrame()).toContain('loading');
       finishCheckout();
       await tick();
     });
@@ -332,11 +332,11 @@ describe('Browser', () => {
     it('keeps a single dialog open: other keys do not stack a second one on top', async () => {
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(stdin, 'j', 'j', 'c');
-      expect(lastFrame()).toContain('Checkout para feature?');
+      expect(lastFrame()).toContain('Check out feature?');
       await press(stdin, '/', 's', 'm', '?');
-      expect(lastFrame()).toContain('Checkout para feature?');
+      expect(lastFrame()).toContain('Check out feature?');
       expect(lastFrame()).not.toContain('Branch:');
-      expect(lastFrame()).not.toContain('Buscar');
+      expect(lastFrame()).not.toContain('Search:');
     });
 
     it('also confirms with y', async () => {
@@ -356,10 +356,10 @@ describe('Browser', () => {
         <Browser initial={data(5)} initialLimit={100} load={vi.fn()} checkout={checkout} />,
       );
       await press(stdin, 'j', 'c');
-      expect(lastFrame()).toContain('Checkout para');
+      expect(lastFrame()).toContain('Check out');
       await press(stdin, key);
       await tick();
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).not.toContain('Check out');
       expect(checkout).not.toHaveBeenCalled();
     });
 
@@ -370,8 +370,8 @@ describe('Browser', () => {
         <Browser initial={data(5)} initialLimit={100} load={load} checkout={checkout} />,
       );
       await press(stdin, 'j', 'c');
-      expect(lastFrame()).toContain('h000001 (HEAD destacado)');
-      expect(lastFrame()).toContain('HEAD ficará destacado');
+      expect(lastFrame()).toContain('h000001 (detached HEAD)');
+      expect(lastFrame()).toContain('HEAD will be detached');
       await press(stdin, '\r');
       await tick();
       expect(checkout).toHaveBeenCalledWith({kind: 'detach', hash: 'h000001'});
@@ -395,7 +395,7 @@ describe('Browser', () => {
       );
       await press(stdin, 'j', 'c');
       const lines = (lastFrame() ?? '').split('\n');
-      expect(lines.some(l => l.includes('Checkout para qual branch?'))).toBe(true);
+      expect(lines.some(l => l.includes('Check out which branch?'))).toBe(true);
       // The list is sorted and starts on the first branch: "> alpha", then "beta".
       const selected = lines.findIndex(l => l.includes('> alpha'));
       expect(selected).toBeGreaterThan(-1);
@@ -411,8 +411,8 @@ describe('Browser', () => {
         <Browser initial={data(5)} initialLimit={100} load={vi.fn()} checkout={checkout} />,
       );
       await press(stdin, 'c');
-      expect(lastFrame()).toContain('já está em main');
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).toContain('already on main');
+      expect(lastFrame()).not.toContain('Check out');
       expect(checkout).not.toHaveBeenCalled();
     });
 
@@ -428,7 +428,7 @@ describe('Browser', () => {
       );
       await press(stdin, 'j', 'j', 'c', '\r');
       await tick();
-      expect(lastFrame()).toContain('erro: Your local changes would be overwritten by checkout: a.txt Aborting');
+      expect(lastFrame()).toContain('error: Your local changes would be overwritten by checkout: a.txt Aborting');
       // The selection stays and nothing was reloaded.
       expect(lastFrame()).toContain('3/5');
       expect(load).not.toHaveBeenCalled();
@@ -437,7 +437,7 @@ describe('Browser', () => {
     it('advertises the key in the footer', () => {
       const {lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn()} />);
       expect(lastFrame()).toContain('c checkout');
-      expect(lastFrame()).toContain('q sair');
+      expect(lastFrame()).toContain('q quit');
     });
 
     it('does nothing without commits', async () => {
@@ -447,7 +447,7 @@ describe('Browser', () => {
         <Browser initial={empty} initialLimit={100} load={vi.fn()} checkout={checkout} />,
       );
       await press(stdin, 'c');
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).not.toContain('Check out');
       expect(checkout).not.toHaveBeenCalled();
     });
 
@@ -475,16 +475,16 @@ describe('Browser', () => {
         const {lastFrame, stdin} = open(checkout, load);
         await press(stdin, 'j', 'j', 'c');
         const frame = lastFrame() ?? '';
-        expect(frame).toContain('Branch local e remota estão em commits diferentes');
-        expect(frame).toContain('> feature e avançar até origin/feature');
-        expect(frame).toContain('feature (sem avançar)');
-        expect(frame).toContain('HEAD destacado neste commit');
+        expect(frame).toContain('The local and the remote branch are at different commits');
+        expect(frame).toContain('> feature and advance to origin/feature');
+        expect(frame).toContain('feature (no advance)');
+        expect(frame).toContain('detached HEAD at this commit');
 
         await press(stdin, '\r');
         await tick();
         expect(checkout).toHaveBeenCalledWith({kind: 'pull', name: 'feature', remote: 'origin'});
         expect(load).toHaveBeenCalled();
-        expect(lastFrame()).toContain('agora em feature (atualizada de origin/feature)');
+        expect(lastFrame()).toContain('now on feature (updated from origin/feature)');
       });
 
       it('lets you switch without pulling', async () => {
@@ -507,7 +507,7 @@ describe('Browser', () => {
         const checkout = vi
           .fn<(t: CheckoutTarget) => Promise<void>>()
           .mockRejectedValue(
-            new PartialCheckoutError('checkout feito para feature, mas o pull falhou: diverged'),
+            new PartialCheckoutError('checked out feature, but could not advance to origin/feature: diverged'),
           );
         const load = vi.fn<LoadGraph>().mockResolvedValue(outOfSync);
         const {lastFrame, stdin} = open(checkout, load);
@@ -516,14 +516,14 @@ describe('Browser', () => {
         await tick();
         expect(load).toHaveBeenCalled();
         // The reload must not wipe the message.
-        expect(lastFrame()).toContain('mas o pull falhou');
+        expect(lastFrame()).toContain('but could not advance');
       });
     });
   });
 
   describe('filtering by several branches', () => {
     const DOWN = '\u001b[B';
-    // The test refs have two branches, listed as: (todas), feature, main.
+    // The test refs have two branches, listed as: (all), feature, main.
     const open = () => {
       const load = vi.fn<LoadGraph>().mockResolvedValue(data(3));
       const view = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
@@ -536,9 +536,9 @@ describe('Browser', () => {
       const frame = lastFrame() ?? '';
       expect(frame).toContain('[x] feature');
       expect(frame).toContain('[x] main');
-      expect(frame).toContain('[ ] (todas as branches)');
-      expect(frame).toContain('2 marcadas');
-      expect(frame).toContain('Espaço marca');
+      expect(frame).toContain('[ ] (all branches)');
+      expect(frame).toContain('2 marked');
+      expect(frame).toContain('Space marks');
 
       await press(stdin, '\r');
       await tick();
@@ -553,7 +553,7 @@ describe('Browser', () => {
       // "feature" is hidden from the picker list by the query but still checked.
       expect(lastFrame()).not.toContain('] feature');
       expect(lastFrame()).toContain('[ ] main');
-      expect(lastFrame()).toContain('1 marcada');
+      expect(lastFrame()).toContain('1 marked');
       await press(stdin, ' ', '\r');
       await tick();
       expect(load).toHaveBeenCalledWith(['feature', 'main'], 100);
@@ -591,7 +591,7 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('[x] feature');
       await press(stdin, ' ');
       expect(lastFrame()).toContain('[ ] feature');
-      expect(lastFrame()).not.toContain('marcada');
+      expect(lastFrame()).not.toContain('marked');
     });
 
     it('cancels with Esc, leaving the filter as it was', async () => {
@@ -599,7 +599,7 @@ describe('Browser', () => {
       await press(stdin, '/', DOWN, ' ', '\u001b');
       await tick();
       expect(load).not.toHaveBeenCalled();
-      expect(lastFrame()).toContain('todas as branches · 1/5');
+      expect(lastFrame()).toContain('all branches · 1/5');
     });
 
     it('summarizes three or more branches in the header', async () => {
@@ -649,28 +649,28 @@ describe('Browser', () => {
         await tick();
         expect(stash).toHaveBeenCalledWith('apply', 'h000000');
         expect(load).toHaveBeenCalledTimes(1);
-        expect(lastFrame()).toContain('stash@{0} aplicado (continua guardado)');
+        expect(lastFrame()).toContain('stash@{0} applied (still stashed)');
 
         await press(stdin, 'p');
         await tick();
         expect(stash).toHaveBeenLastCalledWith('pop', 'h000000');
-        expect(lastFrame()).toContain('stash@{0} aplicado e removido');
+        expect(lastFrame()).toContain('stash@{0} applied and removed');
       });
 
       it('x asks before dropping: n cancels, y drops', async () => {
         const stash = vi.fn().mockResolvedValue('stash@{0}');
         const {lastFrame, stdin} = run(stash);
         await press(stdin, 'x');
-        expect(lastFrame()).toContain('Apagar stash@{0}?');
-        expect(lastFrame()).toContain('Enter/y confirma');
+        expect(lastFrame()).toContain('Drop stash@{0}?');
+        expect(lastFrame()).toContain('Enter/y confirms');
         await press(stdin, 'n');
         expect(stash).not.toHaveBeenCalled();
-        expect(lastFrame()).not.toContain('Apagar stash@{0}?');
+        expect(lastFrame()).not.toContain('Drop stash@{0}?');
 
         await press(stdin, 'x', 'y');
         await tick();
         expect(stash).toHaveBeenCalledWith('drop', 'h000000');
-        expect(lastFrame()).toContain('stash@{0} apagado');
+        expect(lastFrame()).toContain('stash@{0} dropped');
       });
 
       it('other keys do nothing while the drop is being confirmed', async () => {
@@ -678,9 +678,9 @@ describe('Browser', () => {
         const {lastFrame, stdin} = run(stash);
         await press(stdin, 'x', 'j', 'a', 'q');
         expect(stash).not.toHaveBeenCalled();
-        expect(lastFrame()).toContain('Apagar stash@{0}?');
+        expect(lastFrame()).toContain('Drop stash@{0}?');
         await press(stdin, '\u001B');
-        expect(lastFrame()).not.toContain('Apagar');
+        expect(lastFrame()).not.toContain('Delete');
       });
 
       it('on conflicts it reloads, keeps the stash and lists the files', async () => {
@@ -689,15 +689,15 @@ describe('Browser', () => {
         await press(stdin, 'p');
         await tick();
         expect(load).toHaveBeenCalledTimes(1);
-        expect(lastFrame()).toContain('stash@{0}: conflitos em a.txt, b.txt; resolva no terminal (stash mantido)');
+        expect(lastFrame()).toContain('stash@{0}: conflicts in a.txt, b.txt; resolve them in the terminal (stash kept)');
       });
 
       it('other failures show the reason and do not reload', async () => {
-        const stash = vi.fn().mockRejectedValue(new Error('as alterações locais atrapalham'));
+        const stash = vi.fn().mockRejectedValue(new Error('local changes are in the way'));
         const {lastFrame, stdin, load} = run(stash);
         await press(stdin, 'a');
         await tick();
-        expect(lastFrame()).toContain('erro: as alterações locais atrapalham');
+        expect(lastFrame()).toContain('error: local changes are in the way');
         expect(load).not.toHaveBeenCalled();
       });
 
@@ -705,9 +705,9 @@ describe('Browser', () => {
         const stash = vi.fn();
         const {lastFrame, stdin} = run(stash);
         await press(stdin, 'j', 'a');
-        expect(lastFrame()).toContain('só vale em um stash');
+        expect(lastFrame()).toContain('only works on a stash');
         await press(stdin, 'x');
-        expect(lastFrame()).not.toContain('Apagar');
+        expect(lastFrame()).not.toContain('Delete');
         expect(stash).not.toHaveBeenCalled();
       });
     });
@@ -724,15 +724,15 @@ describe('Browser', () => {
         <Browser initial={withStash()} initialLimit={100} load={vi.fn()} checkout={checkout} />,
       );
       await press(stdin, 'c');
-      expect(lastFrame()).toContain('um stash não pode ser usado em checkout');
-      expect(lastFrame()).not.toContain('Checkout para');
+      expect(lastFrame()).toContain('a stash cannot be checked out');
+      expect(lastFrame()).not.toContain('Check out');
       expect(checkout).not.toHaveBeenCalled();
     });
 
     it('still offers a checkout on the commit below the stash', async () => {
       const {lastFrame, stdin} = render(<Browser initial={withStash()} initialLimit={100} load={vi.fn()} />);
       await press(stdin, 'j', 'c');
-      expect(lastFrame()).toContain('Checkout para');
+      expect(lastFrame()).toContain('Check out');
     });
   });
 
@@ -747,16 +747,16 @@ describe('Browser', () => {
     };
 
     it('shows the current branch', () => {
-      expect(header(data(3))).toContain('atual: main');
+      expect(header(data(3))).toContain('current: main');
     });
 
     it('shows the commit when HEAD is detached', () => {
-      expect(header(withHead({hash: 'h000001', branch: null}))).toContain('atual: HEAD destacado em h000001');
+      expect(header(withHead({hash: 'h000001', branch: null}))).toContain('current: detached HEAD at h000001');
     });
 
     it('says when a merge is in progress', () => {
       expect(header(withHead({hash: 'h000000', branch: 'main', merging: true}))).toContain(
-        'atual: main (merge em andamento)',
+        'current: main (merge in progress)',
       );
     });
 
@@ -769,7 +769,7 @@ describe('Browser', () => {
       );
       await press(stdin, 'j', 'j', 'c', '\r');
       await tick();
-      expect((lastFrame() ?? '').split('\n')[0]).toContain('atual: feature');
+      expect((lastFrame() ?? '').split('\n')[0]).toContain('current: feature');
     });
   });
 
@@ -787,15 +787,15 @@ describe('Browser', () => {
       const merge = vi.fn().mockResolvedValue('merged');
       const {lastFrame, stdin, load} = open(actions({merge}));
       await press(stdin, ...toFeature);
-      expect(lastFrame()).toContain('Merge de feature em main?');
-      expect(lastFrame()).toContain('Fast-forward quando possível');
+      expect(lastFrame()).toContain('Merge feature into main?');
+      expect(lastFrame()).toContain('Fast-forward when possible');
       expect(merge).not.toHaveBeenCalled();
 
       await press(stdin, '\r');
       await tick();
       expect(merge).toHaveBeenCalledWith(branchTarget('feature'));
       expect(load).toHaveBeenCalled();
-      expect(lastFrame()).toContain('merge de feature em main concluído');
+      expect(lastFrame()).toContain('merge of feature into main done');
     });
 
     it('also confirms with y and cancels with Esc or n', async () => {
@@ -814,8 +814,8 @@ describe('Browser', () => {
     });
 
     it.each([
-      ['fast-forward', 'fast-forward: main avançou até feature'],
-      ['up-to-date', 'feature já está incluído em main'],
+      ['fast-forward', 'fast-forward: main advanced to feature'],
+      ['up-to-date', 'feature is already included in main'],
     ] as const)('reports %s', async (result, text) => {
       const {lastFrame, stdin} = open(actions({merge: vi.fn().mockResolvedValue(result)}));
       await press(stdin, ...toFeature, '\r');
@@ -838,11 +838,11 @@ describe('Browser', () => {
       const {lastFrame, stdin} = open(actions({merge}), many);
       await press(stdin, 'j', 'm');
       const lines = (lastFrame() ?? '').split('\n');
-      expect(lines.some(l => l.includes('Merge de qual branch em main?'))).toBe(true);
+      expect(lines.some(l => l.includes('Merge which branch into main?'))).toBe(true);
       // Local branches first, the current branch (main) left out, remote marked.
       const first = lines.findIndex(l => l.includes('> zeta'));
       expect(first).toBeGreaterThan(-1);
-      expect(lines[first + 1]).toContain('origin/alpha (remota)');
+      expect(lines[first + 1]).toContain('origin/alpha (remote)');
       expect(lines.some(l => /\s> main\b|> main$/.test(l))).toBe(false);
 
       await press(stdin, '\u001b[B', '\r');
@@ -854,8 +854,8 @@ describe('Browser', () => {
       const merge = vi.fn().mockResolvedValue('merged');
       const {lastFrame, stdin} = open(actions({merge}));
       await press(stdin, 'j', 'm');
-      expect(lastFrame()).toContain('Merge de h000001 (commit) em main?');
-      expect(lastFrame()).toContain('Nenhuma branch aponta para este commit');
+      expect(lastFrame()).toContain('Merge h000001 (commit) into main?');
+      expect(lastFrame()).toContain('No branch points at this commit');
       await press(stdin, '\r');
       await tick();
       expect(merge).toHaveBeenCalledWith({kind: 'commit', hash: 'h000001'});
@@ -866,17 +866,17 @@ describe('Browser', () => {
       // The first row is the current commit.
       const {lastFrame, stdin} = open(actions({merge}));
       await press(stdin, 'm');
-      expect(lastFrame()).toContain('esse já é o commit da branch atual');
+      expect(lastFrame()).toContain('that is already the commit of the current branch');
 
       const detached = open(actions({merge}), {rows: data(3).rows, refs: {...refs, head: {hash: 'h000000', branch: null}}});
       await press(detached.stdin, 'j', 'm');
-      expect(detached.lastFrame()).toContain('HEAD destacado: troque para uma branch antes do merge');
+      expect(detached.lastFrame()).toContain('detached HEAD: switch to a branch before merging');
 
       const stashed = data(3);
       stashed.rows = layoutGraph([{...linear(3)[0]!, stash: true}, ...linear(3).slice(1)]);
       const onStash = open(actions({merge}), stashed);
       await press(onStash.stdin, 'm');
-      expect(onStash.lastFrame()).toContain('um stash não pode ser mesclado');
+      expect(onStash.lastFrame()).toContain('a stash cannot be merged');
       expect(merge).not.toHaveBeenCalled();
     });
 
@@ -885,7 +885,7 @@ describe('Browser', () => {
       const {lastFrame, stdin, load} = open(actions({merge}), data(5), vi.fn<LoadGraph>());
       await press(stdin, ...toFeature, '\r');
       await tick();
-      expect(lastFrame()).toContain('erro: Your local changes would be overwritten by merge: a.txt Aborting');
+      expect(lastFrame()).toContain('error: Your local changes would be overwritten by merge: a.txt Aborting');
       expect(load).not.toHaveBeenCalled();
     });
 
@@ -898,11 +898,11 @@ describe('Browser', () => {
         await press(stdin, ...toFeature, '\r');
         await tick();
         const frame = lastFrame() ?? '';
-        expect(frame).toContain('Merge com conflitos (2 arquivos)');
+        expect(frame).toContain('Merge with conflicts (2 files)');
         expect(frame).toContain('a.txt, b.txt');
-        expect(frame).toContain('> Abortar o merge (git merge --abort)');
-        expect(frame).toContain('Deixar em andamento (resolva no terminal)');
-        expect(frame).toContain('a aborta');
+        expect(frame).toContain('> Abort the merge (git merge --abort)');
+        expect(frame).toContain('Leave it in progress (resolve it in the terminal)');
+        expect(frame).toContain('a aborts');
         // The view is refreshed so the header can say a merge is in progress.
         expect(load).toHaveBeenCalled();
       });
@@ -916,8 +916,8 @@ describe('Browser', () => {
           await press(stdin, ...keys);
           await tick();
           expect(abort).toHaveBeenCalledTimes(1);
-          expect(lastFrame()).toContain('merge abortado');
-          expect(lastFrame()).not.toContain('Merge com conflitos');
+          expect(lastFrame()).toContain('merge aborted');
+          expect(lastFrame()).not.toContain('Merge with conflicts');
         }
       });
 
@@ -930,8 +930,8 @@ describe('Browser', () => {
           await press(stdin, ...keys);
           await tick();
           expect(abort).not.toHaveBeenCalled();
-          expect(lastFrame()).toContain('merge deixado em andamento');
-          expect(lastFrame()).not.toContain('Merge com conflitos');
+          expect(lastFrame()).toContain('merge left in progress');
+          expect(lastFrame()).not.toContain('Merge with conflicts');
         }
       });
 
@@ -942,7 +942,7 @@ describe('Browser', () => {
         await tick();
         await press(stdin, 'a');
         await tick();
-        expect(lastFrame()).toContain('erro: There is no merge to abort');
+        expect(lastFrame()).toContain('error: There is no merge to abort');
       });
     });
 
@@ -954,7 +954,7 @@ describe('Browser', () => {
       await press(stdin, 'm');
       await tick();
       expect(conflicts).toHaveBeenCalled();
-      expect(lastFrame()).toContain('Merge com conflitos (1 arquivo)');
+      expect(lastFrame()).toContain('Merge with conflicts (1 file)');
       expect(lastFrame()).toContain('x.txt');
       await press(stdin, 'a');
       await tick();
@@ -966,13 +966,13 @@ describe('Browser', () => {
       const {lastFrame, stdin} = open(actions({conflicts: vi.fn().mockResolvedValue([])}), inProgress);
       await press(stdin, 'm');
       await tick();
-      expect(lastFrame()).toContain('Merge em andamento');
+      expect(lastFrame()).toContain('Merge in progress');
     });
 
     it('advertises the key in the footer', () => {
       const {lastFrame} = open(noMerge);
       expect(lastFrame()).toContain('m merge');
-      expect(lastFrame()).toContain('q sair');
+      expect(lastFrame()).toContain('q quit');
     });
   });
 
@@ -1024,15 +1024,15 @@ describe('Browser', () => {
       await tick();
       await tick();
       expect(lastFrame()).toContain('h000002');
-      expect(lastFrame()).toContain('carregando');
+      expect(lastFrame()).toContain('loading');
       expect(lastFrame()).not.toContain('src/a.ts');
     });
 
-    it('abre com Enter e lista os arquivos com status e contagem', async () => {
+    it('opens with Enter and lists the files with status and counts', async () => {
       const {lastFrame, changes} = await open();
       const frame = lastFrame() ?? '';
       expect(changes.files).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}));
-      expect(frame).toContain('Arquivos alterados (3)');
+      expect(frame).toContain('Changed files (3)');
       expect(frame).toContain('src/a.ts');
       expect(frame).toContain('+3');
       expect(frame).toContain('old.ts → new name.ts');
@@ -1040,27 +1040,27 @@ describe('Browser', () => {
       expect(frame).not.toContain('1/5');
     });
 
-    it('Enter num arquivo mostra o diff dele e Esc volta à lista de arquivos', async () => {
+    it('Enter on a file shows its diff and Esc goes back to the file list', async () => {
       const {lastFrame, stdin, changes} = await open();
       await press(stdin, 'j', '\r');
       expect(changes.fullDiff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), files[1]);
       await press(stdin, '\u001B');
-      expect(lastFrame()).toContain('Arquivos alterados (3)');
+      expect(lastFrame()).toContain('Changed files (3)');
     });
 
-    it('mostra o arquivo inteiro lado a lado, com antes e depois alinhados', async () => {
+    it('shows the whole file side by side, with before and after aligned', async () => {
       const {lastFrame, stdin} = await open();
       await press(stdin, '\r', );
       await tick();
       const frame = lastFrame() ?? '';
-      expect(frame).toContain('antes: src/a.ts');
-      expect(frame).toContain('depois: src/a.ts');
+      expect(frame).toContain('before: src/a.ts');
+      expect(frame).toContain('after: src/a.ts');
       expect(frame).toMatch(/ 1 keep\s+│\s+1 keep/);
       expect(frame).toMatch(/-2 old line\s+│\+2 new line/);
       expect(frame).toMatch(/ 3 tail\s+│\s+3 tail/);
     });
 
-    it('u alterna para o diff unificado e de volta', async () => {
+    it('u switches to the unified diff and back', async () => {
       const {lastFrame, stdin, changes} = await open();
       await press(stdin, '\r');
       await press(stdin, 'u');
@@ -1070,25 +1070,25 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('+new line');
       await press(stdin, 'u');
       await tick();
-      expect(lastFrame()).toContain('antes: src/a.ts');
+      expect(lastFrame()).toContain('before: src/a.ts');
     });
 
-    it('arquivo binário abre direto no unificado', async () => {
+    it('a binary file opens straight in unified', async () => {
       const {lastFrame, stdin, changes} = await open();
       await press(stdin, 'j', 'j', '\r');
       await tick();
       expect(changes.fullDiff).not.toHaveBeenCalled();
       expect(changes.diff).toHaveBeenCalledWith(expect.anything(), files[2]);
-      expect(lastFrame()).not.toContain('antes:');
+      expect(lastFrame()).not.toContain('before:');
     });
 
-    it('d abre o diff do commit inteiro, sem arquivo', async () => {
+    it('d opens the diff of the whole commit, with no file', async () => {
       const {stdin, changes} = await open();
       await press(stdin, 'd');
       expect(changes.diff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), undefined);
     });
 
-    it('q fecha a visão sem sair e mantém a seleção', async () => {
+    it('q closes the view without quitting and keeps the selection', async () => {
       const {lastFrame, stdin} = render(
         <Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />,
       );
@@ -1096,12 +1096,12 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('3/5');
     });
 
-    it('mostra o erro do git ao listar os arquivos', async () => {
+    it("shows git's error when listing the files", async () => {
       const {lastFrame} = await open({files: () => Promise.reject(new Error('fatal: bad object'))});
-      expect(lastFrame()).toContain('erro: fatal: bad object');
+      expect(lastFrame()).toContain('error: fatal: bad object');
     });
 
-    it('rola o diff com j', async () => {
+    it('scrolls the diff with j', async () => {
       const lines = Array.from({length: 200}, (_, i) => `+line ${i}`);
       const {lastFrame, stdin} = await open({diff: () => diffOf(lines)});
       await press(stdin, 'd');
@@ -1316,9 +1316,9 @@ describe('Browser', () => {
 
   it('shows the active log filters in the header', () => {
     const {lastFrame} = render(
-      <Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} filters={['autor Ana', 'sem tags']} />,
+      <Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} filters={['author Ana', 'no tags']} />,
     );
-    expect(lastFrame()).toContain('autor Ana, sem tags');
+    expect(lastFrame()).toContain('author Ana, no tags');
   });
 
   it('starts filtered by the revisions given on the command line', () => {
@@ -1326,7 +1326,7 @@ describe('Browser', () => {
       <Browser initial={data(3)} initialLimit={100} initialRevs={['main', 'feature']} load={vi.fn<LoadGraph>()} />,
     );
     expect(lastFrame()).toContain('main, feature');
-    expect(lastFrame()).not.toContain('todas as branches');
+    expect(lastFrame()).not.toContain('all branches');
   });
 
   describe('help screen (?)', () => {
@@ -1334,13 +1334,13 @@ describe('Browser', () => {
       const {stdin, lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(stdin, '?');
       const frame = lastFrame() ?? '';
-      expect(frame).toContain('gitgraph · ajuda');
-      expect(frame).toContain('Lista de commits');
-      expect(frame).toContain('move a seleção');
+      expect(frame).toContain('gitgraph · help');
+      expect(frame).toContain('Commit list');
+      expect(frame).toContain('move the selection');
       expect(frame).not.toContain('1/5');
       await press(stdin, '?');
       expect(lastFrame()).toContain('1/5');
-      expect(lastFrame()).not.toContain('gitgraph · ajuda');
+      expect(lastFrame()).not.toContain('gitgraph · help');
       await press(stdin, '?', '\u001B');
       expect(lastFrame()).toContain('1/5');
     });
@@ -1352,9 +1352,9 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('1/5');
       await press(stdin, '?', 'G');
       // The last section is in view after jumping to the end.
-      expect(lastFrame()).toContain('campos de nome e de busca');
+      expect(lastFrame()).toContain('name and search fields');
       await press(stdin, 'g');
-      expect(lastFrame()).toContain('Lista de commits');
+      expect(lastFrame()).toContain('Commit list');
     });
 
     it('uses words instead of arrows with --ascii', async () => {
@@ -1370,7 +1370,7 @@ describe('Browser', () => {
 
     it('the footer of the list points to it', () => {
       const {lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
-      expect(lastFrame()).toContain('? ajuda');
+      expect(lastFrame()).toContain('? help');
     });
   });
 
@@ -1386,7 +1386,7 @@ describe('Browser', () => {
 
     it('limits the graph so the commit text stays visible, and says which columns are shown', () => {
       const frame = open().lastFrame() ?? '';
-      expect(frame).toContain('grafo 1-26/50 (h/l)');
+      expect(frame).toContain('graph 1-26/50 (h/l)');
       const first = frame.split('\n').find(l => l.includes('h000000')) ?? '';
       expect(first).toContain('commit 0');
       expect(first).toContain('Ana,');
@@ -1395,23 +1395,23 @@ describe('Browser', () => {
     it('l and h pan the graph by two columns, within the limits', async () => {
       const {stdin, lastFrame} = open();
       await press(stdin, 'h');
-      expect(lastFrame()).toContain('grafo 1-26/50');
+      expect(lastFrame()).toContain('graph 1-26/50');
       await press(stdin, 'l', 'l');
-      expect(lastFrame()).toContain('grafo 5-30/50');
+      expect(lastFrame()).toContain('graph 5-30/50');
       await press(stdin, 'h');
-      expect(lastFrame()).toContain('grafo 3-28/50');
+      expect(lastFrame()).toContain('graph 3-28/50');
       // Pressed back to back, without waiting for a render: every press still counts.
       for (let i = 0; i < 20; i++) stdin.write('l');
       await tick();
-      expect(lastFrame()).toContain('grafo 25-50/50');
+      expect(lastFrame()).toContain('graph 25-50/50');
     });
 
     it('the arrows pan too', async () => {
       const {stdin, lastFrame} = open();
       await press(stdin, '\u001B[C');
-      expect(lastFrame()).toContain('grafo 3-28/50');
+      expect(lastFrame()).toContain('graph 3-28/50');
       await press(stdin, '\u001B[D');
-      expect(lastFrame()).toContain('grafo 1-26/50');
+      expect(lastFrame()).toContain('graph 1-26/50');
     });
 
     it('moving the selection to a node outside the window brings it into view', async () => {
@@ -1419,15 +1419,15 @@ describe('Browser', () => {
       // The row of tip 40 has its node in column 40.
       await press(stdin, ...Array<string>(40).fill('j'));
       expect(lastFrame()).toContain('41/100');
-      expect(lastFrame()).toContain('grafo 16-41/50');
+      expect(lastFrame()).toContain('graph 16-41/50');
       await press(stdin, 'g');
-      expect(lastFrame()).toContain('grafo 1-26/50');
+      expect(lastFrame()).toContain('graph 1-26/50');
     });
 
     it('a narrow graph is not clipped and h/l do nothing', async () => {
       const {stdin, lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(stdin, 'l');
-      expect(lastFrame()).not.toContain('grafo ');
+      expect(lastFrame()).not.toMatch(/graph \d+-\d+\//);
     });
   });
 
@@ -1450,7 +1450,7 @@ describe('Browser', () => {
     it('C asks first, then cherry-picks the selected commit and reloads', async () => {
       const {stdin, lastFrame, act, load} = open();
       await press(stdin, 'j', 'C');
-      expect(lastFrame()).toContain('Cherry-pick de h000001 em main?');
+      expect(lastFrame()).toContain('Cherry-pick h000001 onto main?');
       expect(lastFrame()).toContain('commit 1');
       await press(stdin, 'n');
       expect(act.cherryPick).not.toHaveBeenCalled();
@@ -1458,18 +1458,18 @@ describe('Browser', () => {
       await tick();
       expect(act.cherryPick).toHaveBeenCalledWith('h000001', false);
       expect(load).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).toContain('cherry-pick de h000001 aplicado');
+      expect(lastFrame()).toContain('cherry-pick of h000001 applied');
     });
 
     it('v asks first, then reverts', async () => {
       const {stdin, lastFrame, act} = open();
       // Reverting the HEAD commit is allowed (it is the usual case).
       await press(stdin, 'v');
-      expect(lastFrame()).toContain('Reverter h000000?');
+      expect(lastFrame()).toContain('Revert h000000?');
       await press(stdin, 'y');
       await tick();
       expect(act.revert).toHaveBeenCalledWith('h000000', false);
-      expect(lastFrame()).toContain('h000000 revertido');
+      expect(lastFrame()).toContain('h000000 reverted');
     });
 
     it('a merge commit is applied relative to its first parent, and the prompt says so', async () => {
@@ -1480,7 +1480,7 @@ describe('Browser', () => {
         <Browser initial={{rows, refs: {...refs, head: {hash: 'hzzzzzz', branch: 'main'}}}} initialLimit={100} load={vi.fn<LoadGraph>()} history={act} />,
       );
       await press(stdin, 'C');
-      expect(lastFrame()).toContain('Commit de merge: aplicado em relação ao 1º pai');
+      expect(lastFrame()).toContain('Merge commit: applied relative to the 1st parent');
       await press(stdin, 'y');
       await tick();
       expect(act.cherryPick).toHaveBeenCalledWith('h000000', true);
@@ -1492,8 +1492,8 @@ describe('Browser', () => {
       await press(stdin, 'j', 'C', 'y');
       await tick();
       expect(load).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).toContain('cherry-pick com conflitos (1 arquivo): a.txt');
-      expect(lastFrame()).toContain('Pular este passo');
+      expect(lastFrame()).toContain('cherry-pick with conflicts (1 file): a.txt');
+      expect(lastFrame()).toContain('Skip this step');
     });
 
     it('other failures show the reason and do not reload', async () => {
@@ -1501,28 +1501,28 @@ describe('Browser', () => {
       const {stdin, lastFrame, load} = open(history({revert}));
       await press(stdin, 'v', 'y');
       await tick();
-      expect(lastFrame()).toContain('erro: your local changes would be overwritten');
+      expect(lastFrame()).toContain('error: your local changes would be overwritten');
       expect(load).not.toHaveBeenCalled();
     });
 
     it('X opens the reset prompt on the selected commit; the HEAD itself is refused', async () => {
       const {stdin, lastFrame} = open();
       await press(stdin, 'X');
-      expect(lastFrame()).toContain('o HEAD já está nesse commit');
+      expect(lastFrame()).toContain('HEAD is already at that commit');
       await press(stdin, 'j', 'X');
       await tick();
-      expect(lastFrame()).toContain('Reset de main para h000001');
+      expect(lastFrame()).toContain('Reset main to h000001');
       // The list keys are the prompt's now.
       await press(stdin, 'q');
-      expect(lastFrame()).toContain('Reset de main para h000001');
+      expect(lastFrame()).toContain('Reset main to h000001');
       await press(stdin, '\u001B');
-      expect(lastFrame()).not.toContain('Reset de');
+      expect(lastFrame()).not.toContain('Reset ');
     });
 
     it('C on the HEAD commit is refused', async () => {
       const {stdin, lastFrame, act} = open();
       await press(stdin, 'C');
-      expect(lastFrame()).toContain('esse commit já é o HEAD');
+      expect(lastFrame()).toContain('that commit is already HEAD');
       expect(act.cherryPick).not.toHaveBeenCalled();
     });
 
@@ -1533,14 +1533,14 @@ describe('Browser', () => {
         <Browser initial={inProgress} initialLimit={100} load={vi.fn<LoadGraph>()} history={act} />,
       );
       await press(stdin, 'j', 'C');
-      expect(lastFrame()).toContain('rebase em andamento: aperte m');
+      expect(lastFrame()).toContain('rebase in progress: press m');
       expect(act.cherryPick).not.toHaveBeenCalled();
     });
 
     it('is refused on a stash, on the uncommitted node and without the actions', async () => {
       const bare = render(<Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(bare.stdin, 'j', 'v');
-      expect(bare.lastFrame()).toContain('indisponíveis');
+      expect(bare.lastFrame()).toContain('unavailable');
 
       const commits = linear(3);
       commits[0] = {...commits[0]!, stash: true};
@@ -1548,8 +1548,8 @@ describe('Browser', () => {
         <Browser initial={{rows: layoutGraph(commits), refs}} initialLimit={100} load={vi.fn<LoadGraph>()} history={history()} />,
       );
       await press(stashed.stdin, 'C');
-      expect(stashed.lastFrame()).toContain('um stash não é um commit da história');
-      expect(stashed.lastFrame()).not.toContain('Cherry-pick de');
+      expect(stashed.lastFrame()).toContain('a stash is not a commit of the history');
+      expect(stashed.lastFrame()).not.toContain('Cherry-pick ');
     });
   });
 
@@ -1571,8 +1571,8 @@ describe('Browser', () => {
     };
 
     it('the header says which operation is stopped', () => {
-      expect(open('rebase').lastFrame()).toContain('atual: main (rebase em andamento)');
-      expect(open('cherry-pick').lastFrame()).toContain('(cherry-pick em andamento)');
+      expect(open('rebase').lastFrame()).toContain('current: main (rebase in progress)');
+      expect(open('cherry-pick').lastFrame()).toContain('(cherry-pick in progress)');
     });
 
     it('m opens the dialog with the files and the options, skip included', async () => {
@@ -1580,17 +1580,17 @@ describe('Browser', () => {
       await press(stdin, 'm');
       await tick();
       const frame = lastFrame() ?? '';
-      expect(frame).toContain('rebase com conflitos (3 arquivos): a.txt, b.txt +1');
-      expect(frame).toContain('> Abortar o rebase (git rebase --abort)');
-      expect(frame).toContain('Continuar (git rebase --continue)');
-      expect(frame).toContain('Pular este passo (git rebase --skip)');
-      expect(frame).toContain('a aborta');
+      expect(frame).toContain('rebase with conflicts (3 files): a.txt, b.txt +1');
+      expect(frame).toContain('> Abort the rebase (git rebase --abort)');
+      expect(frame).toContain('Continue (git rebase --continue)');
+      expect(frame).toContain('Skip this step (git rebase --skip)');
+      expect(frame).toContain('a aborts');
     });
 
     it.each([
-      ['a', 'abort', 'rebase abortado'],
-      ['c', 'proceed', 'rebase continuado'],
-      ['s', 'skip', 'rebase passo pulado'],
+      ['a', 'abort', 'rebase aborted'],
+      ['c', 'proceed', 'rebase continued'],
+      ['s', 'skip', 'rebase step skipped'],
     ] as const)('%s runs %s, reloads and says what happened', async (key, method, message) => {
       const {stdin, lastFrame, act, load} = open('rebase');
       await press(stdin, 'm');
@@ -1618,7 +1618,7 @@ describe('Browser', () => {
         await press(stdin, 'm');
         await tick();
         await press(stdin, key);
-        expect(lastFrame()).toContain('cherry-pick deixado em andamento');
+        expect(lastFrame()).toContain('cherry-pick left in progress');
         expect(act.abort).not.toHaveBeenCalled();
         expect(load).not.toHaveBeenCalled();
       }
@@ -1631,7 +1631,7 @@ describe('Browser', () => {
       await tick();
       await press(stdin, 'c');
       await tick();
-      expect(lastFrame()).toContain('erro: you must resolve conflicts first');
+      expect(lastFrame()).toContain('error: you must resolve conflicts first');
       expect(load).toHaveBeenCalledTimes(1);
     });
 
@@ -1639,7 +1639,7 @@ describe('Browser', () => {
       const {stdin, lastFrame} = open('rebase', actions({conflicts: vi.fn().mockResolvedValue([])}));
       await press(stdin, 'm');
       await tick();
-      expect(lastFrame()).toContain('rebase em andamento: sem conflitos pendentes');
+      expect(lastFrame()).toContain('rebase in progress: no conflicts left');
     });
 
     it('ignores the list keys and the mouse while the dialog is open', async () => {
@@ -1647,7 +1647,7 @@ describe('Browser', () => {
       await press(stdin, 'm');
       await tick();
       await press(stdin, 'j', 'q');
-      expect(lastFrame()).toContain('Abortar o rebase');
+      expect(lastFrame()).toContain('Abort the rebase');
       expect(lastFrame()).toContain('1/3');
     });
   });
@@ -1671,24 +1671,24 @@ describe('Browser', () => {
     it('b opens the name field on the selected commit; creating reloads and confirms', async () => {
       const {stdin, lastFrame, refEdit, load} = open();
       await press(stdin, 'j', 'b');
-      expect(lastFrame()).toContain('Nova branch em h000001');
+      expect(lastFrame()).toContain('New branch at h000001');
       // The list keys are the field's now: q and j are letters, not commands.
       await press(stdin, 'q', 'j');
-      expect(lastFrame()).toContain('Nome: qj');
+      expect(lastFrame()).toContain('Name: qj');
       await press(stdin, '\u007F', '\u007F', 'n', 'e', 'w', '\r');
       await tick();
       expect(refEdit.createBranch).toHaveBeenCalledWith('new', 'h000001');
       expect(load).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).toContain('branch new criada em h000001');
-      expect(lastFrame()).not.toContain('Nova branch');
+      expect(lastFrame()).toContain('branch new created at h000001');
+      expect(lastFrame()).not.toContain('New branch');
     });
 
     it('Esc closes it without doing anything', async () => {
       const {stdin, lastFrame, refEdit, load} = open();
       await press(stdin, 't');
-      expect(lastFrame()).toContain('Nova tag em h000000');
+      expect(lastFrame()).toContain('New tag at h000000');
       await press(stdin, '\u001B');
-      expect(lastFrame()).not.toContain('Nova tag');
+      expect(lastFrame()).not.toContain('New tag');
       expect(refEdit.createTag).not.toHaveBeenCalled();
       expect(load).not.toHaveBeenCalled();
     });
@@ -1697,21 +1697,21 @@ describe('Browser', () => {
       const {stdin, lastFrame} = open();
       // Row 0 holds the current branch main only: nothing to delete, but it can be renamed.
       await press(stdin, 'D');
-      expect(lastFrame()).toContain('não dá para apagar a branch atual');
+      expect(lastFrame()).toContain('cannot delete the current branch');
       await press(stdin, 'R');
-      expect(lastFrame()).toContain('Renomear branch main');
+      expect(lastFrame()).toContain('Rename branch main');
       await press(stdin, '\u001B', 'j', 'R');
-      expect(lastFrame()).toContain('nenhuma branch local nem tag neste commit');
+      expect(lastFrame()).toContain('no local branch or tag on this commit');
       await press(stdin, 'D');
-      expect(lastFrame()).toContain('nenhuma branch local nem tag neste commit');
+      expect(lastFrame()).toContain('no local branch or tag on this commit');
       await press(stdin, 'j', 'D');
-      expect(lastFrame()).toContain('Apagar branch feature?');
+      expect(lastFrame()).toContain('Delete branch feature?');
     });
 
     it('says so without the actions, on a stash and on the uncommitted node', async () => {
       const bare = render(<Browser initial={data(3)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(bare.stdin, 'b');
-      expect(bare.lastFrame()).toContain('indisponível');
+      expect(bare.lastFrame()).toContain('unavailable');
 
       const commits = linear(3);
       commits[0] = {...commits[0]!, stash: true};
@@ -1719,8 +1719,8 @@ describe('Browser', () => {
         <Browser initial={{rows: layoutGraph(commits), refs}} initialLimit={100} load={vi.fn<LoadGraph>()} refEdit={editor()} />,
       );
       await press(stashed.stdin, 'b');
-      expect(stashed.lastFrame()).toContain('um stash não é um commit da história');
-      expect(stashed.lastFrame()).not.toContain('Nova branch');
+      expect(stashed.lastFrame()).toContain('a stash is not a commit of the history');
+      expect(stashed.lastFrame()).not.toContain('New branch');
 
       const wip: Commit = {
         ...commit(9, ['h000000']),
@@ -1736,8 +1736,8 @@ describe('Browser', () => {
         />,
       );
       await press(dirty.stdin, 'b');
-      expect(dirty.lastFrame()).toContain('as alterações não commitadas não são um commit');
-      expect(dirty.lastFrame()).not.toContain('Nova branch');
+      expect(dirty.lastFrame()).toContain('the uncommitted changes are not a commit');
+      expect(dirty.lastFrame()).not.toContain('New branch');
     });
   });
 
@@ -1747,7 +1747,7 @@ describe('Browser', () => {
       const {lastFrame} = render(
         <Browser initial={{rows: layoutGraph(linear(3)), refs: upstreamRefs}} initialLimit={100} load={vi.fn<LoadGraph>()} />,
       );
-      expect(lastFrame()).toContain('atual: main ↑2 ↓3');
+      expect(lastFrame()).toContain('current: main ↑2 ↓3');
     });
 
     it('f fetches in the background, shows progress and reloads when done', async () => {
@@ -1757,18 +1757,18 @@ describe('Browser', () => {
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} fetch={fetch} />);
       await press(stdin, 'f');
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).toContain('buscando remotas');
+      expect(lastFrame()).toContain('fetching remotes');
       // A second f while fetching does not start another one.
       await press(stdin, 'f');
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).toContain('já estou buscando');
+      expect(lastFrame()).toContain('already fetching');
       expect(load).not.toHaveBeenCalled();
       finish();
       await tick();
       await tick();
       expect(load).toHaveBeenCalledTimes(1);
-      expect(lastFrame()).not.toContain('buscando remotas');
-      expect(lastFrame()).toContain('remotas atualizadas');
+      expect(lastFrame()).not.toContain('fetching remotes');
+      expect(lastFrame()).toContain('remotes updated');
     });
 
     it('shows the reason in the footer when the fetch fails and does not reload', async () => {
@@ -1777,15 +1777,15 @@ describe('Browser', () => {
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} fetch={fetch} />);
       await press(stdin, 'f');
       await tick();
-      expect(lastFrame()).toContain('erro: unable to access remote');
-      expect(lastFrame()).not.toContain('buscando remotas');
+      expect(lastFrame()).toContain('error: unable to access remote');
+      expect(lastFrame()).not.toContain('fetching remotes');
       expect(load).not.toHaveBeenCalled();
     });
 
     it('says so when there is no way to fetch', async () => {
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(stdin, 'f');
-      expect(lastFrame()).toContain('fetch indisponível');
+      expect(lastFrame()).toContain('fetch unavailable');
     });
   });
 
@@ -1798,7 +1798,7 @@ describe('Browser', () => {
         author: '',
         email: '',
         date: '2026-03-04T10:00:00+00:00',
-        subject: 'Alterações não commitadas (1 modificado, 2 não rastreados)',
+        subject: 'Uncommitted changes (1 modified, 2 untracked)',
         body: '',
         uncommitted: {staged: 0, modified: 1, untracked: 2, conflicted: 0},
       };
@@ -1818,7 +1818,7 @@ describe('Browser', () => {
       const {lastFrame} = open();
       const frame = lastFrame() ?? '';
       expect(frame).toContain('working');
-      expect(frame).toContain('Alterações não commitadas (1 modificado, 2 não rastreados)');
+      expect(frame).toContain('Uncommitted changes (1 modified, 2 untracked)');
       expect(frame).toContain('1/4');
       const line = frame.split('\n').find(l => l.includes('working')) ?? '';
       expect(line).not.toContain('Ana');
@@ -1828,32 +1828,32 @@ describe('Browser', () => {
     it('describes it in the details panel instead of a commit', () => {
       const {lastFrame} = open();
       const frame = lastFrame() ?? '';
-      expect(frame).toContain('sobre o HEAD (h000000)');
-      expect(frame).toContain('1 modificado, 2 não rastreados');
+      expect(frame).toContain('on top of HEAD (h000000)');
+      expect(frame).toContain('1 modified, 2 untracked');
       expect(frame).not.toContain('@example.com');
     });
 
     it('does not open, copy or check out the node, and says why', async () => {
       const {lastFrame, stdin, changes, copy, checkout} = open();
       await press(stdin, '\r');
-      expect(lastFrame()).toContain('não há o que abrir');
+      expect(lastFrame()).toContain('nothing to open');
       expect(changes.files).not.toHaveBeenCalled();
       await press(stdin, 'y');
-      expect(lastFrame()).toContain('não há hash');
+      expect(lastFrame()).toContain('there is no hash');
       expect(copy).not.toHaveBeenCalled();
       await press(stdin, 'c');
-      expect(lastFrame()).toContain('não há o que fazer checkout');
-      expect(lastFrame()).not.toContain('Enter/y confirma');
+      expect(lastFrame()).toContain('nothing to check out');
+      expect(lastFrame()).not.toContain('Enter/y confirms');
       expect(checkout).not.toHaveBeenCalled();
       await press(stdin, 'm');
-      expect(lastFrame()).toContain('não há o que mesclar');
+      expect(lastFrame()).toContain('nothing to merge');
     });
 
     it('the commits under it still open normally', async () => {
       const {lastFrame, stdin, changes} = open();
       await press(stdin, 'j', '\r');
       expect(changes.files).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}));
-      expect(lastFrame()).toContain('Arquivos alterados');
+      expect(lastFrame()).toContain('Changed files');
     });
   });
 
@@ -1871,7 +1871,7 @@ describe('Browser', () => {
       expect(short).toContain('2026-03-04 10:00');
       expect(withDate('iso')).toContain('Ana, 2026-03-04 10:00');
       const relative = withDate('relative');
-      expect(relative).toMatch(/Ana, há (\d+ (anos?|meses|mês)|\d+ semanas?)/);
+      expect(relative).toMatch(/Ana, (\d+ (years?|months?)|\d+ weeks?) ago/);
       expect(relative).toContain('(2026-03-04 10:00)');
     });
   });
@@ -1883,7 +1883,7 @@ describe('Browser', () => {
       await press(stdin, 'j', 'y');
       await tick();
       expect(copy).toHaveBeenCalledWith('h000001');
-      expect(lastFrame()).toContain('hash copiado: h000001');
+      expect(lastFrame()).toContain('hash copied: h000001');
     });
 
     it('with OSC 52 it cannot confirm, so it shows the whole hash', async () => {
@@ -1900,7 +1900,7 @@ describe('Browser', () => {
       const first = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} copy={failing} />);
       await press(first.stdin, 'y');
       await tick();
-      expect(first.lastFrame()).toContain('não foi possível copiar; hash: h000000');
+      expect(first.lastFrame()).toContain('could not copy; hash: h000000');
 
       const second = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
       await press(second.stdin, 'y');
@@ -1926,7 +1926,7 @@ describe('Browser', () => {
       expect(load).toHaveBeenCalledWith([], 100);
       // h000002 moved from row 3 to row 4 because of the new commit on top.
       expect(lastFrame()).toContain('4/6');
-      expect(lastFrame()).toContain('atualizado');
+      expect(lastFrame()).toContain('updated');
     });
 
     it('a change reported by the watcher reloads the same way', async () => {
@@ -1944,7 +1944,7 @@ describe('Browser', () => {
       await tick();
       expect(load).toHaveBeenCalledTimes(1);
       expect(lastFrame()).toContain('3/6');
-      expect(lastFrame()).toContain('o repositório mudou');
+      expect(lastFrame()).toContain('the repository changed');
     });
 
     it('shows the error when the reload fails and keeps the list', async () => {
@@ -1952,7 +1952,7 @@ describe('Browser', () => {
       const {lastFrame, stdin} = render(<Browser initial={data(5)} initialLimit={100} load={load} />);
       await press(stdin, 'r');
       await tick();
-      expect(lastFrame()).toContain('erro: boom');
+      expect(lastFrame()).toContain('error: boom');
       expect(lastFrame()).toContain('1/5');
     });
   });
@@ -1972,14 +1972,14 @@ describe('Browser', () => {
     it('jumps to the first match from the cursor as you type and shows the counter', async () => {
       const {lastFrame, stdin} = open();
       await typeQuery(stdin, 'fix');
-      expect(lastFrame()).toContain('Buscar: fix');
-      expect(lastFrame()).toContain('3 resultados');
+      expect(lastFrame()).toContain('Search: fix');
+      expect(lastFrame()).toContain('3 results');
       // The cursor is already on a match (row 0), so it stays.
       expect(lastFrame()).toContain('1/5');
       await press(stdin, '\u007F', '\u007F', '\u007F');
       await press(stdin, 'c', 'a', 'c');
       expect(lastFrame()).toContain('3/5');
-      expect(lastFrame()).toContain('1 resultado');
+      expect(lastFrame()).toContain('1 result');
     });
 
     it('finds by author and by hash', async () => {
@@ -1995,11 +1995,11 @@ describe('Browser', () => {
       const {lastFrame, stdin} = open();
       await typeQuery(stdin, 'fix');
       await press(stdin, '\r');
-      expect(lastFrame()).toContain('busca "fix" 1/3');
-      expect(lastFrame()).toContain('n/N próximo/anterior');
+      expect(lastFrame()).toContain('search "fix" 1/3');
+      expect(lastFrame()).toContain('n/N next/previous');
       await press(stdin, 'n');
       expect(lastFrame()).toContain('3/5');
-      expect(lastFrame()).toContain('busca "fix" 2/3');
+      expect(lastFrame()).toContain('search "fix" 2/3');
       await press(stdin, 'n', 'n');
       expect(lastFrame()).toContain('1/5');
       await press(stdin, 'N');
@@ -2017,7 +2017,7 @@ describe('Browser', () => {
       expect(lines.find(l => l.includes('fix typo'))).toContain('*');
       expect(lines.find(l => l.includes('add search'))).not.toContain('*');
       await press(stdin, '\u001B');
-      expect(lastFrame()).not.toContain('busca "fix"');
+      expect(lastFrame()).not.toContain('search "fix"');
       expect(lastFrame()).not.toContain('*');
     });
 
@@ -2031,22 +2031,22 @@ describe('Browser', () => {
       expect(lastFrame()).toContain('5/5');
       await press(stdin, '\u001B');
       expect(lastFrame()).toContain('1/5');
-      expect(lastFrame()).toContain('busca "docs"');
+      expect(lastFrame()).toContain('search "docs"');
     });
 
     it('says so when nothing is found and drops the search', async () => {
       const {lastFrame, stdin} = open();
       await typeQuery(stdin, 'zzz');
-      expect(lastFrame()).toContain('nenhum resultado');
+      expect(lastFrame()).toContain('no results');
       await press(stdin, '\r');
-      expect(lastFrame()).toContain('nenhum commit encontrado para "zzz"');
-      expect(lastFrame()).not.toContain('busca "zzz"');
+      expect(lastFrame()).toContain('no commit found for "zzz"');
+      expect(lastFrame()).not.toContain('search "zzz"');
     });
 
     it('n without a search explains how to start one', async () => {
       const {lastFrame, stdin} = open();
       await press(stdin, 'n');
-      expect(lastFrame()).toContain('aperte s para buscar');
+      expect(lastFrame()).toContain('press s to search');
     });
 
     describe('through history that is not loaded yet', () => {
@@ -2066,15 +2066,15 @@ describe('Browser', () => {
       it('Enter with no match among the loaded commits keeps loading until it finds one', async () => {
         const {stdin, lastFrame, load} = growing();
         await press(stdin, 's', ...'commit 450'.split(''));
-        expect(lastFrame()).toContain('nenhum resultado carregado');
-        expect(lastFrame()).toContain('Enter procura no resto do histórico');
+        expect(lastFrame()).toContain('no loaded results');
+        expect(lastFrame()).toContain('Enter searches the rest of the history');
         await press(stdin, '\r');
         await settle();
         // 100 -> 200 -> 400 -> 800 (600 exist).
         expect(load.mock.calls.map(c => c[1])).toEqual([200, 400, 800]);
         expect(lastFrame()).toContain('451/600');
-        expect(lastFrame()).toContain('busca "commit 450" 1/1');
-        expect(lastFrame()).not.toContain('procurando');
+        expect(lastFrame()).toContain('search "commit 450" 1/1');
+        expect(lastFrame()).not.toContain('looking for');
       });
 
       it('shows that it is searching, and Esc cancels it keeping the search', async () => {
@@ -2089,9 +2089,9 @@ describe('Browser', () => {
           <Browser initial={{rows: layoutGraph(linear(100)), refs}} initialLimit={100} load={load} />,
         );
         await press(stdin, 's', ...'commit 450'.split(''), '\r');
-        expect(lastFrame()).toContain('procurando "commit 450" no histórico');
+        expect(lastFrame()).toContain('looking for "commit 450" in the history');
         await press(stdin, '\u001B');
-        expect(lastFrame()).toContain('busca no histórico cancelada');
+        expect(lastFrame()).toContain('history search cancelled');
         // The load that was already running ends without taking the cursor anywhere.
         pending.forEach(resolve => resolve());
         await settle();
@@ -2104,8 +2104,8 @@ describe('Browser', () => {
         await press(stdin, 's', ...'zzz'.split(''), '\r');
         await settle();
         expect(load.mock.calls.map(c => c[1])).toEqual([200, 400, 800]);
-        expect(lastFrame()).toContain('nenhum commit encontrado para "zzz" em todo o histórico');
-        expect(lastFrame()).not.toContain('busca "zzz"');
+        expect(lastFrame()).toContain('no commit found for "zzz" in the whole history');
+        expect(lastFrame()).not.toContain('search "zzz"');
       });
 
       it('n at the last loaded match goes on searching instead of wrapping around', async () => {
@@ -2132,7 +2132,7 @@ describe('Browser', () => {
         await press(stdin, 'n');
         await settle();
         expect(load).not.toHaveBeenCalled();
-        expect(lastFrame()).toContain('a busca recomeçou do outro lado');
+        expect(lastFrame()).toContain('the search wrapped around');
       });
 
       it('with a -n ceiling there is nothing more to load, so Enter reports it right away', async () => {
@@ -2141,7 +2141,7 @@ describe('Browser', () => {
           <Browser initial={{rows: layoutGraph(linear(100)), refs}} initialLimit={100} maxCommits={100} load={load} />,
         );
         await press(stdin, 's', ...'commit 450'.split(''), '\r');
-        expect(lastFrame()).toContain('nenhum commit encontrado para "commit 450"');
+        expect(lastFrame()).toContain('no commit found for "commit 450"');
         expect(load).not.toHaveBeenCalled();
       });
     });
@@ -2149,8 +2149,8 @@ describe('Browser', () => {
     it('does not take keys such as q or j as commands while typing', async () => {
       const {lastFrame, stdin} = open();
       await typeQuery(stdin, 'qj');
-      expect(lastFrame()).toContain('Buscar: qj');
-      expect(lastFrame()).toContain('nenhum resultado');
+      expect(lastFrame()).toContain('Search: qj');
+      expect(lastFrame()).toContain('no results');
     });
   });
 });

@@ -1,13 +1,13 @@
 import {createContext, useContext} from 'react';
 import type {DateStyle} from './date.js';
 
-/** Opções de exibição escolhidas na linha de comando. */
+/** Display options chosen on the command line. */
 export interface Display {
-  /** Cores de lane e de refs. Negrito, esmaecido e o destaque da seleção continuam. */
+  /** Lane and ref colors. Bold, dim and the selection highlight stay. */
   color: boolean;
-  /** Só caracteres ASCII no grafo e nos textos de interface. */
+  /** Only ASCII characters in the graph and the interface texts. */
   ascii: boolean;
-  /** Linha de ligação entre todos os commits (`│`); desligado, uma linha por commit. */
+  /** Connector line between all commits (`│`); off, one line per commit. */
   spaced: boolean;
   /** How commit dates are written; `short` when absent. */
   date?: DateStyle;
@@ -19,11 +19,11 @@ export const DisplayContext = createContext<Display>({color: true, ascii: false,
 
 export const useDisplay = (): Display => useContext(DisplayContext);
 
-/** Devolve a cor só quando as cores estão ligadas. */
+/** Returns the color only when colors are on. */
 export const tint = <T extends string>(display: Display, color: T | undefined): T | undefined =>
   display.color ? color : undefined;
 
-/** Separador de itens nos textos de interface. */
+/** Item separator in the interface texts. */
 export const separator = (display: Display): string => (display.ascii ? '|' : '·');
 
 /** The other symbols of the interface texts, with their ASCII forms; every one goes through here so `--ascii` covers it all. */

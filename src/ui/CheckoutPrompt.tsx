@@ -23,7 +23,7 @@ export function CheckoutPrompt({targets, index, head}: Props) {
     return (
       <Box flexDirection="column" height={DETAIL_LINES}>
         <Text wrap="truncate-end">
-          <Text bold>Checkout para </Text>
+          <Text bold>Check out </Text>
           <Text bold color="yellow">
             {describeTarget(only)}
           </Text>
@@ -31,7 +31,7 @@ export function CheckoutPrompt({targets, index, head}: Props) {
         </Text>
         <Text wrap="truncate-end" dimColor>
           {only.kind === 'detach'
-            ? 'Nenhuma branch local aponta para este commit: o HEAD ficará destacado.'
+            ? 'No local branch points at this commit: HEAD will be detached.'
             : ' '}
         </Text>
       </Box>
@@ -44,8 +44,8 @@ export function CheckoutPrompt({targets, index, head}: Props) {
     <Box flexDirection="column" height={DETAIL_LINES}>
       <Text bold wrap="truncate-end">
         {targets.some(t => t.kind === 'pull')
-          ? 'Branch local e remota estão em commits diferentes. Checkout:'
-          : 'Checkout para qual branch?'}
+          ? 'The local and the remote branch are at different commits. Check out:'
+          : 'Check out which branch?'}
       </Text>
       {targets.slice(start, start + size).map((target, i) => {
         const active = start + i === index;

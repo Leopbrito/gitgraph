@@ -11,12 +11,12 @@ const commit = {
   author: 'Ana',
   email: 'ana@example.com',
   date: '2026-03-04T10:00:00+00:00',
-  subject: 'primeiro commit',
+  subject: 'first commit',
   body: '',
 };
 
 describe('GraphRowView', () => {
-  it('mostra grafo, hash curto, refs, assunto, autor e data', () => {
+  it('shows the graph, short hash, refs, subject, author and date', () => {
     const [row] = layoutGraph([commit]);
     const {lastFrame} = render(
       <GraphRowView
@@ -31,11 +31,11 @@ describe('GraphRowView', () => {
     expect(frame).toContain('abcdef1');
     expect(frame).toContain('(HEAD -> main)');
     expect(frame).toContain('(tag: v1)');
-    expect(frame).toContain('primeiro commit');
+    expect(frame).toContain('first commit');
     expect(frame).toContain('Ana, 2026-03-04');
   });
 
-  it('desenha o nó em ASCII quando pedido', () => {
+  it('draws the node in ASCII when asked', () => {
     const [row] = layoutGraph([commit]);
     const {lastFrame} = render(
       <DisplayContext.Provider value={{color: false, ascii: true, spaced: true}}>

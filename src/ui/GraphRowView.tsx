@@ -17,11 +17,11 @@ export const laneColor = (color: number, palette: readonly string[] = PALETTE): 
 
 interface Props {
   row: GraphRow;
-  /** Largura global do grafo, em colunas, para alinhar o texto à direita. */
+  /** Global width of the graph, in columns, to align the text on the right. */
   graphWidth: number;
   refs: Ref[];
   head: HeadInfo;
-  /** Destaca a linha (cursor da navegação). */
+  /** Highlights the row (navigation cursor). */
   selected?: boolean;
   /** The row matches the active search. */
   matched?: boolean;
@@ -29,8 +29,8 @@ interface Props {
   columnWindow?: {offset: number; count: number};
 }
 
-// Cada linha é um único <Text> truncado na largura do terminal: o grafo não
-// desalinha e commits longos não quebram em várias linhas.
+// Each row is a single <Text> truncated to the terminal width: the graph does not
+// misalign and long commits do not wrap onto several lines.
 // Memoized: a key press moves the cursor, and only the two rows whose `selected` changed need drawing
 // again (the props are stable for the rows that did not change; see the Browser).
 export const GraphRowView = React.memo(function GraphRowView({row, graphWidth, refs, head, selected = false, matched = false, columnWindow}: Props) {
@@ -41,7 +41,7 @@ export const GraphRowView = React.memo(function GraphRowView({row, graphWidth, r
     <Box flexDirection="column">
       <Text wrap="truncate-end">
         <GraphCells cells={lines.node} graphWidth={graphWidth} columnWindow={columnWindow} />
-        {/* O marcador mantém a seleção visível sem estilos (--no-color desliga o inverso); `*` marca os resultados da busca. */}
+        {/* The marker keeps the selection visible without styles (--no-color turns off inverse); `*` marks the search results. */}
         <Text>{selected ? '>' : matched ? '*' : ' '}</Text>
         <Text inverse={selected}>
           <Text dimColor>{commit.uncommitted ? 'working' : commit.hash.slice(0, 7)} </Text>

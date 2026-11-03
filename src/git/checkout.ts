@@ -89,9 +89,9 @@ export function describeTarget(target: CheckoutTarget): string {
     case 'branch':
       return target.name;
     case 'pull':
-      return `${target.name} (atualizada de ${target.remote}/${target.name})`;
+      return `${target.name} (updated from ${target.remote}/${target.name})`;
     case 'detach':
-      return `${target.hash.slice(0, 7)} (HEAD destacado)`;
+      return `${target.hash.slice(0, 7)} (detached HEAD)`;
   }
 }
 
@@ -99,11 +99,11 @@ export function describeTarget(target: CheckoutTarget): string {
 export function describeOption(target: CheckoutTarget): string {
   switch (target.kind) {
     case 'branch':
-      return target.unsynced ? `${target.name} (sem avançar)` : target.name;
+      return target.unsynced ? `${target.name} (no advance)` : target.name;
     case 'pull':
-      return `${target.name} e avançar até ${target.remote}/${target.name}`;
+      return `${target.name} and advance to ${target.remote}/${target.name}`;
     case 'detach':
-      return `${target.hash.slice(0, 7)} (HEAD destacado neste commit)`;
+      return `${target.hash.slice(0, 7)} (detached HEAD at this commit)`;
   }
 }
 
@@ -144,7 +144,7 @@ export async function checkout(cwd: string, target: CheckoutTarget): Promise<voi
     } catch (error) {
       const reason = summarizeGitError(error instanceof Error ? error.message : String(error));
       throw new PartialCheckoutError(
-        `checkout feito para ${target.name}, mas não deu para avançar até ${target.remote}/${target.name}: ${reason}`,
+        `checked out ${target.name}, but could not advance to ${target.remote}/${target.name}: ${reason}`,
       );
     }
   }
