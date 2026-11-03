@@ -5,6 +5,7 @@ import type {RefInfo} from '../../src/git/refs.js';
 import {layoutGraph} from '../../src/graph/layout.js';
 import type {Commit} from '../../src/graph/types.js';
 import {PartialCheckoutError, type CheckoutTarget} from '../../src/git/checkout.js';
+import type {ChangedFile, ChangesActions} from '../../src/git/changes.js';
 import {MergeConflictError, type MergeActions, type MergeTarget} from '../../src/git/merge.js';
 import {Browser as BrowserView, type GraphData, type LoadGraph} from '../../src/ui/Browser.js';
 import {DisplayContext} from '../../src/ui/display.js';
@@ -16,12 +17,19 @@ const noMerge: MergeActions = {
   conflicts: () => Promise.resolve([]),
 };
 
-/** The real Browser with harmless default `checkout` and `merge`, so most tests need not pass them. */
-function Browser(props: Omit<React.ComponentProps<typeof BrowserView>, 'checkout' | 'merge'> & {
+const noChanges: ChangesActions = {
+  files: () => Promise.resolve([]),
+  diff: () => Promise.resolve({lines: [], truncated: false}),
+  fullDiff: () => Promise.resolve({lines: [], truncated: false}),
+};
+
+/** The real Browser with harmless default `checkout`, `merge` and `changes`, so most tests need not pass them. */
+function Browser(props: Omit<React.ComponentProps<typeof BrowserView>, 'checkout' | 'merge' | 'changes'> & {
   checkout?: (target: CheckoutTarget) => Promise<void>;
   merge?: MergeActions;
+  changes?: ChangesActions;
 }) {
-  return <BrowserView checkout={noCheckout} merge={noMerge} {...props} />;
+  return <BrowserView checkout={noCheckout} merge={noMerge} changes={noChanges} {...props} />;
 }
 
 const commit = (n: number, parents: string[]): Commit => ({
@@ -808,6 +816,114 @@ describe('Browser', () => {
       const {lastFrame} = open(noMerge);
       expect(lastFrame()).toContain('m merge');
       expect(lastFrame()).toContain('q sair');
+    });
+  });
+
+  describe('commit view', () => {
+    const files: ChangedFile[] = [
+      {path: 'src/a.ts', status: 'M', added: 3, deleted: 1},
+      {path: 'new name.ts', oldPath: 'old.ts', status: 'R', added: 0, deleted: 0},
+      {path: 'logo.png', status: 'A', added: null, deleted: null},
+    ];
+    const diffOf = (lines: string[]) => Promise.resolve({lines, truncated: false});
+
+    const open = async (extra: Partial<ChangesActions> = {}) => {
+      const changes: ChangesActions = {
+        files: vi.fn(() => Promise.resolve(files)),
+        diff: vi.fn(() => diffOf(['diff --git a/src/a.ts b/src/a.ts', '@@ -1 +1 @@', '-old line', '+new line'])),
+        fullDiff: vi.fn(() =>
+          diffOf(['diff --git a/src/a.ts b/src/a.ts', '@@ -1,3 +1,3 @@', ' keep', '-old line', '+new line', ' tail']),
+        ),
+        ...extra,
+      };
+      const rendered = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} changes={changes} />);
+      await press(rendered.stdin, '\r');
+      await tick();
+      return {...rendered, changes};
+    };
+
+    it('abre com Enter e lista os arquivos com status e contagem', async () => {
+      const {lastFrame, changes} = await open();
+      const frame = lastFrame() ?? '';
+      expect(changes.files).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}));
+      expect(frame).toContain('Arquivos alterados (3)');
+      expect(frame).toContain('src/a.ts');
+      expect(frame).toContain('+3');
+      expect(frame).toContain('old.ts → new name.ts');
+      expect(frame).toContain('bin');
+      expect(frame).not.toContain('1/5');
+    });
+
+    it('Enter num arquivo mostra o diff dele e Esc volta à lista de arquivos', async () => {
+      const {lastFrame, stdin, changes} = await open();
+      await press(stdin, 'j', '\r');
+      expect(changes.fullDiff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), files[1]);
+      await press(stdin, '\u001B');
+      expect(lastFrame()).toContain('Arquivos alterados (3)');
+    });
+
+    it('mostra o arquivo inteiro lado a lado, com antes e depois alinhados', async () => {
+      const {lastFrame, stdin} = await open();
+      await press(stdin, '\r', );
+      await tick();
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('antes: src/a.ts');
+      expect(frame).toContain('depois: src/a.ts');
+      expect(frame).toMatch(/ 1 keep\s+│\s+1 keep/);
+      expect(frame).toMatch(/-2 old line\s+│\+2 new line/);
+      expect(frame).toMatch(/ 3 tail\s+│\s+3 tail/);
+    });
+
+    it('u alterna para o diff unificado e de volta', async () => {
+      const {lastFrame, stdin, changes} = await open();
+      await press(stdin, '\r');
+      await press(stdin, 'u');
+      await tick();
+      expect(changes.diff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), files[0]);
+      expect(lastFrame()).toContain('@@ -1 +1 @@');
+      expect(lastFrame()).toContain('+new line');
+      await press(stdin, 'u');
+      await tick();
+      expect(lastFrame()).toContain('antes: src/a.ts');
+    });
+
+    it('arquivo binário abre direto no unificado', async () => {
+      const {lastFrame, stdin, changes} = await open();
+      await press(stdin, 'j', 'j', '\r');
+      await tick();
+      expect(changes.fullDiff).not.toHaveBeenCalled();
+      expect(changes.diff).toHaveBeenCalledWith(expect.anything(), files[2]);
+      expect(lastFrame()).not.toContain('antes:');
+    });
+
+    it('d abre o diff do commit inteiro, sem arquivo', async () => {
+      const {stdin, changes} = await open();
+      await press(stdin, 'd');
+      expect(changes.diff).toHaveBeenCalledWith(expect.objectContaining({hash: 'h000000'}), undefined);
+    });
+
+    it('q fecha a visão sem sair e mantém a seleção', async () => {
+      const {lastFrame, stdin} = render(
+        <Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />,
+      );
+      await press(stdin, 'j', 'j', '\r', 'q');
+      expect(lastFrame()).toContain('3/5');
+    });
+
+    it('mostra o erro do git ao listar os arquivos', async () => {
+      const {lastFrame} = await open({files: () => Promise.reject(new Error('fatal: bad object'))});
+      expect(lastFrame()).toContain('erro: fatal: bad object');
+    });
+
+    it('rola o diff com j', async () => {
+      const lines = Array.from({length: 200}, (_, i) => `+line ${i}`);
+      const {lastFrame, stdin} = await open({diff: () => diffOf(lines)});
+      await press(stdin, 'd');
+      await tick();
+      expect(lastFrame()).toContain('+line 0');
+      await press(stdin, 'G');
+      expect(lastFrame()).toContain('+line 199');
+      expect(lastFrame()).not.toContain('+line 0\n');
     });
   });
 });

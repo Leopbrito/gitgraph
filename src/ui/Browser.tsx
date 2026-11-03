@@ -15,6 +15,7 @@ import {
   type MergeResult,
   type MergeTarget,
 } from '../git/merge.js';
+import type {ChangesActions} from '../git/changes.js';
 import {localBranchTips, type RefInfo} from '../git/refs.js';
 import {needsConnector} from '../graph/glyphs.js';
 import type {GraphRow} from '../graph/types.js';
@@ -22,6 +23,7 @@ import {BranchPicker} from './BranchPicker.js';
 import {CheckoutPrompt} from './CheckoutPrompt.js';
 import {ConflictPrompt} from './ConflictPrompt.js';
 import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
+import {CommitView} from './CommitView.js';
 import {separator, tint, useDisplay} from './display.js';
 import {headLabel} from './format.js';
 import {GraphRowView} from './GraphRowView.js';
@@ -47,6 +49,8 @@ interface Props {
   checkout: (target: CheckoutTarget) => Promise<void>;
   /** Git operations around a merge, injected like `load`. */
   merge: MergeActions;
+  /** Files and diffs of a commit, for the full-screen commit view. */
+  changes: ChangesActions;
 }
 
 // Cabeçalho, separador, rodapé e uma linha de folga: se a saída ocupar todas as
@@ -59,7 +63,7 @@ const LOAD_AHEAD = 20;
 const oneLine = (message: string) =>
   message.replace(/\s+/g, ' ').replace(/^(error|fatal): /i, '').trim();
 
-export function Browser({initial, initialLimit, maxCommits, load, checkout, merge}: Props) {
+export function Browser({initial, initialLimit, maxCommits, load, checkout, merge, changes}: Props) {
   const {exit} = useApp();
   const display = useDisplay();
   const dot = separator(display);
@@ -76,6 +80,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   const [mergePrompt, setMergePrompt] = useState<{targets: MergeTarget[]; index: number} | null>(null);
   // A merge in progress: 0 = abort it, 1 = leave it for the terminal.
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
+  const [viewing, setViewing] = useState(false);
   const request = useRef(0);
 
   const branches = useMemo(() => branchNames(data.refs), [data.refs]);
@@ -221,6 +226,9 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
   };
 
   useInput((input, key) => {
+    // The commit view has its own keys.
+    if (viewing) return;
+
     if (mergePrompt) {
       const single = mergePrompt.targets.length === 1;
       const last = mergePrompt.targets.length - 1;
@@ -303,6 +311,7 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
     else if (key.pageUp) select(cursor.selected - pageSize);
     else if (key.home || input === 'g') select(0);
     else if (key.end || input === 'G') select(total - 1);
+    else if ((key.return || input === 'd') && commit) setViewing(true);
     else if (input === '/') setPicker({query: '', index: 0, selected: revs});
     else if (input === 'm' && !loading) {
       const head = data.refs.head;
@@ -357,7 +366,19 @@ export function Browser({initial, initialLimit, maxCommits, load, checkout, merg
         : picker
           ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
           : (notice ??
-            `j/k ${arrows} mover ${dot} g/G início/fim ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
+            `j/k ${arrows} mover ${dot} g/G início/fim ${dot} Enter detalhes ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
+
+  if (viewing && commit) {
+    return (
+      <CommitView
+        commit={commit}
+        refs={refsOf(commit.hash)}
+        head={headOf(commit.hash)}
+        changes={changes}
+        onClose={() => setViewing(false)}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" height={terminalRows - 1}>

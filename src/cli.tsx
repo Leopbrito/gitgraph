@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import React from 'react';
 import {render} from 'ink';
 import {HELP, parseCliArgs, UsageError} from './args.js';
+import {gitChanges} from './git/changes.js';
 import {checkout} from './git/checkout.js';
 import {abortMerge, conflictedFiles, merge as mergeInto} from './git/merge.js';
 import {loadCommits} from './git/log.js';
@@ -69,6 +70,7 @@ async function main() {
         maxCommits={options.maxCount}
         load={load}
         checkout={target => checkout(cwd, target)}
+        changes={gitChanges(cwd)}
         merge={{
           merge: target => mergeInto(cwd, target),
           abort: () => abortMerge(cwd),

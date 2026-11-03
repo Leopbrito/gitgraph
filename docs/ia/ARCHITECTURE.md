@@ -37,6 +37,7 @@ src/
     stash.ts       # loadStashes()/parseStashList(): entradas do `git stash list` (hash e stash@{n})
     refs.ts        # loadRefs()/parseRefs(): branches, remotos, tags e HEAD por commit
     merge.ts       # mergeTargets()/describeMergeTarget() (puros), merge(), abortMerge(), mergeInProgress(), conflictedFiles(), MergeConflictError
+    changes.ts     # parseChanges()/splitDiff() (puros), loadChanges()/loadDiff()/loadFullDiff() via `git diff-tree`, gitChanges() (ChangesActions com cache), DIFF_MAX_LINES e FULL_DIFF_MAX_LINES
     checkout.ts    # checkoutTargets()/isCurrent()/describeTarget()/describeOption() (puros) e checkout() via `git switch` (+ `pull --ff-only`)
   graph/
     types.ts       # Commit, Ref, Edge, GraphRow
@@ -46,7 +47,12 @@ src/
     Browser.tsx    # TUI: seleção, rolagem, filtro por branch e carga sob demanda
     display.ts     # DisplayContext (cor/ASCII), tint() e separator()
     GraphRowView.tsx # uma linha do grafo em Ink (cores por lane, truncada, destaque)
-    CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas)
+    CommitDetail.tsx # painel com os detalhes do commit selecionado (5 linhas fixas; o detalhe completo está em CommitView)
+    CommitView.tsx # visão em tela cheia do commit: mensagem, arquivos alterados e diff (Enter/d)
+    DiffView.tsx   # diff de um arquivo (lado a lado ou unificado) ou do commit (unificado), com rolagem
+    diff.ts        # classifyDiff(): tipo de cada linha de um diff unificado (puro)
+    sideBySide.ts  # alignDiff()/changeStarts(): diff unificado -> linhas antes/depois alinhadas (puro)
+    scroll.ts      # wrapText(), scrollBy() e keepVisible() para rolagem de linhas de altura 1 (puro)
     BranchPicker.tsx # seletor de branch (ocupa o lugar do painel de detalhes)
     CheckoutPrompt.tsx # confirmação do checkout (ocupa o lugar do painel de detalhes)
     MergePrompt.tsx # confirmação do merge (idem)
@@ -86,7 +92,7 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 
 ### Interação (TTY)
 
-- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `c` faz checkout; `m` faz merge na branch atual; `q` sai.
+- `j`/`k`/setas movem a seleção; `PgUp`/`PgDn` andam uma página; `g`/`G` (ou `Home`/`End`) vão ao início/fim; `Enter`/`d` abre a visão do commit; `c` faz checkout; `m` faz merge na branch atual; `q` sai.
 - `/` abre o seletor de branch (locais e remotas) com seleção múltipla: digitar filtra a lista, `↑`/`↓` movem, `Espaço` marca/desmarca (em "todas", limpa as marcas), `Enter` aplica, `Esc` cancela. O filtro é uma lista `revs: string[]` (vazia = todas, via `--exclude=refs/stash --all`); aplicar recarrega com `git log <revs...>`, ou seja, a união dos commits alcançáveis de cada branch. As marcas são do estado do seletor (`selected`), sobrevivem à digitação, e o seletor abre já com o filtro atual marcado. `chosenRevs` (puro, em `picker.ts`) decide o que o `Enter` aplica: as marcadas na ordem da lista ou, sem nenhuma, a destacada.
 - A janela visível é calculada em linhas, não em commits, porque um commit com linha de ligação ocupa 2 linhas (`viewport.ts`). O deslocamento é recalculado a cada render, então redimensionar o terminal não esconde o cursor.
 - Carga sob demanda: a CLI começa com 500 commits; quando a lista está cheia e a seleção chega a 20 commits do fim, recarrega com o dobro do limite. O prefixo da ordem escolhida (veja "Ordem dos commits") não muda com `--max-count`, então o layout dos commits já mostrados permanece igual.
@@ -94,6 +100,14 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 - **Checkout (`c`):** `checkoutTargets` escolhe o destino do commit selecionado: as branches locais cuja ponta ele é (ordenadas) ou, se não houver, HEAD destacado (`git switch --detach <hash>`); pontas só remotas caem em HEAD destacado. Sempre pede confirmação (`CheckoutPrompt`; com várias branches é uma lista). Se o HEAD já está no destino, só avisa no rodapé. Nunca usa `--force`: o git recusa quando alterações locais seriam sobrescritas, e a mensagem vira o erro de uma linha no rodapé.
 - **Branch local atrás da remota:** se o commit é a ponta de `origin/x` e a branch local `x` (`localBranchTips` em `refs.ts`) está em outro commit, `checkoutTargets` devolve `[pull x, branches realmente no commit, x sem pull, HEAD destacado]` e o prompt é uma lista com a primeira opção selecionada. O nome da branch local é o que sobra depois da remota, tentando cada `/` (aguenta `origin/feature/x`). `checkout` de um alvo `pull` faz `git switch x` e depois `git pull --ff-only <remota> x`. Se o pull falha, lança `PartialCheckoutError` (a troca já aconteceu): o `Browser` recarrega para o HEAD refletir isso e mantém a mensagem, filtrada por `summarizeGitError` (tira o resumo do fetch e as `hint:`). O pull usa `git(..., {network: true})`: `GIT_TERMINAL_PROMPT=0`, processo sem terminal de controle (`detached`, para o ssh não pedir senha na TUI) e limite de 2 minutos.
 - Depois do sucesso do checkout, `Browser` chama `reload` (cursor mantido) para o marcador HEAD acompanhar. `Browser` recebe `checkout(target)` por parâmetro, como `load`.
+
+### Visão do commit (arquivos e diff)
+
+O painel `CommitDetail` continua com 5 linhas fixas. O que o commit mudou não cabe nele, então `Enter`/`d` troca a tela inteira por `CommitView` (o `Browser` guarda só `viewing`; enquanto está aberta, o `useInput` do `Browser` ignora as teclas e a visão trata as suas). A visão tem cabeçalho, a mensagem completa (quebrada em `wrapText`, com rolagem) e a lista de arquivos; `Tab` alterna o foco entre as duas. `Enter` abre o `DiffView` do arquivo selecionado (ou do commit, se o foco está na mensagem), `d` sempre o do commit inteiro; `Esc`/`q` volta um nível. Enquanto o `DiffView` está aberto, o `useInput` do `CommitView` fica inativo (`isActive`).
+
+Os dados vêm de `ChangesActions` (`files(commit)` e `diff(commit, file?)`), injetada no `Browser` como `load` e `merge`. `loadChanges` roda `git diff-tree -r -M --raw --numstat -z <hash>^1 <hash>` (commit raiz: `--root <hash>`): comparar com o **primeiro pai** faz um merge mostrar o que trouxe para a branch e um stash mostrar o que guardou. Com `-z` os nomes não precisam de escape, e `parseChanges` junta as entradas `--raw` (status e caminhos) com as `--numstat` (binário vem como `-`, vira `null`). `loadDiff` usa `diff-tree -p` com os dois caminhos de um renomeado (senão o git mostra remoção mais adição) e corta em `DIFF_MAX_LINES` (5000) para um commit enorme não travar a tela; o git ainda lê tudo, o corte é só na exibição. `gitChanges` guarda os 50 resultados mais recentes por hash (commits não mudam) e descarta o que falhou. **Lado a lado.** Um arquivo de texto abre em duas colunas (antes | depois) com o arquivo inteiro: `loadFullDiff` pede o mesmo `diff-tree -p` com `--unified=1000000`, que devolve o arquivo todo como um hunk só, e `alignDiff` (puro) transforma isso em linhas alinhadas: contexto nos dois lados, e em cada bloco de mudanças a n-ésima linha removida fica ao lado da n-ésima adicionada (o lado mais curto fica em branco). Cada lado leva o seu próprio número de linha; hunks separados (não ocorre com contexto total) ganham uma linha `gap`. Sem cor, o marcador `-`/`+` na frente do número distingue as linhas. A rolagem é uma só para os dois lados, abre na primeira mudança e `n`/`N` pulam entre blocos (`changeStarts`). `u` troca para o unificado (`diff` com hunks); binário e o diff do commit inteiro são só unificados. O corte do lado a lado é `FULL_DIFF_MAX_LINES` (20000), porque o arquivo todo é mostrado. As colunas têm a mesma largura e o texto é cortado por caracteres (UTF-16), então caracteres largos (CJK, emoji) podem desalinhar o divisor; não há rolagem horizontal. Um arquivo só renomeado, sem mudança de conteúdo, não tem hunk e mostra um aviso.
+
+`classifyDiff` decide a cor de cada linha olhando o estado (cabeçalho até o primeiro `@@`), para uma linha removida `-- x` não ser confundida com o cabeçalho `---`.
 
 ### Ordem dos commits
 
