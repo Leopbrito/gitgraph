@@ -12,7 +12,7 @@ export interface Commit {
   parents: string[];
   author: string;
   email: string;
-  /** Data do autor em ISO 8601. */
+  /** Author date in ISO 8601. */
   date: string;
   subject: string;
   body: string;
@@ -29,30 +29,30 @@ export interface Ref {
   kind: RefKind;
 }
 
-/** Aresta de um commit para um de seus pais. */
+/** An edge from a commit to one of its parents. */
 export interface Edge {
   parent: string;
-  /** Coluna da lane do pai logo após esta linha (índice em `lanesAfter`). */
+  /** Column of the parent's lane right after this row (index in `lanesAfter`). */
   column: number;
 }
 
 export interface GraphRow {
   commit: Commit;
-  /** Coluna do commit em `lanesBefore`. */
+  /** Column of the commit in `lanesBefore`. */
   column: number;
   /**
-   * Lanes ao chegar nesta linha, sem buracos: cada posição é um hash esperado
-   * e o índice é a coluna na tela. Uma ponta nova entra no fim da lista.
+   * Lanes on arriving at this row, without gaps: each position is an expected hash
+   * and the index is the column on screen. A new tip goes at the end of the list.
    */
   lanesBefore: string[];
-  /** Idem, depois de processar o commit. */
+  /** Same, after processing the commit. */
   lanesAfter: string[];
-  /** Cor de cada lane (paralelo a `lanesBefore`); a lane mantém a cor ao se deslocar. */
+  /** Color of each lane (parallel to `lanesBefore`); a lane keeps its color when it shifts. */
   colorsBefore: number[];
-  /** Cor de cada lane (paralelo a `lanesAfter`). */
+  /** Color of each lane (parallel to `lanesAfter`). */
   colorsAfter: number[];
-  /** Uma aresta por pai, na ordem de `commit.parents`. */
+  /** One edge per parent, in the order of `commit.parents`. */
   edges: Edge[];
-  /** Número de colunas necessárias para desenhar esta linha. */
+  /** Number of columns needed to draw this row. */
   width: number;
 }

@@ -1,16 +1,16 @@
 import type {Commit, GraphRow} from './types.js';
 
 /**
- * Atribui colunas e arestas aos commits. Espera a lista em ordem topológica
- * (filhos antes dos pais), como `git log --topo-order` devolve.
+ * Assigns columns and edges to the commits. Expects the list in topological
+ * order (children before parents), as `git log --topo-order` returns it.
  *
- * As lanes formam uma lista densa de hashes esperados: o índice é a coluna na
- * tela e, quando uma lane termina, as da direita deslizam para a esquerda
- * (o desenho dessa transição fica em glyphs.ts). Regras:
- * - o commit fica na lane que o espera; sem lane (ponta nova), entra no fim;
- * - o primeiro pai herda a lane do filho (e a cor); os demais abrem lanes
- *   logo à direita dele;
- * - pai que já tem lane recebe a aresta nela, sem abrir lane duplicada.
+ * The lanes form a dense list of expected hashes: the index is the column on
+ * screen and, when a lane ends, the ones to its right slide to the left
+ * (the drawing of that transition lives in glyphs.ts). Rules:
+ * - the commit takes the lane that expects it; with no lane (a new tip), it goes at the end;
+ * - the first parent inherits the child's lane (and color); the others open lanes
+ *   right next to it;
+ * - a parent that already has a lane gets the edge in it, without opening a duplicate lane.
  */
 export function layoutGraph(commits: Commit[]): GraphRow[] {
   return commits.map(createLayout());
@@ -40,7 +40,7 @@ export function createLayout(): (commit: Commit) => GraphRow {
     const [first, ...others] = commit.parents;
     let insertAt = column + 1;
     if (first === undefined || lanesAfter.includes(first)) {
-      // Sem pais, ou o primeiro pai já tem lane: a lane do commit termina aqui.
+      // No parents, or the first parent already has a lane: the commit's lane ends here.
       lanesAfter.splice(column, 1);
       colorsAfter.splice(column, 1);
       insertAt = column;

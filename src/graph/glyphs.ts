@@ -1,27 +1,27 @@
 import type {GraphRow} from './types.js';
 
-/** Um caractere do grafo e a cor (da lane) que ele usa. */
+/** A character of the graph and the (lane) color it uses. */
 export interface Cell {
   char: string;
   color: number;
 }
 
 export interface GraphLines {
-  /** Linha do commit: marcador e lanes passantes. */
+  /** The commit line: marker and passing lanes. */
   node: Cell[];
-  /** Linha de ligação (merge, fork ou deslocamento de lanes); null se não há. */
+  /** Connector line (merge, fork or lane shift); null if there is none. */
   connector: Cell[] | null;
 }
 
-/** Cada coluna ocupa duas células: o glifo e o espaço (ou `─`, `╱`, `╲`) até a próxima. */
+/** Each column takes two cells: the glyph and the gap (or `─`, `╱`, `╲`) up to the next one. */
 export const CELLS_PER_COLUMN = 2;
 
-/** Trajeto de uma lane entre a linha do commit e a linha seguinte. */
+/** The path of a lane between the commit line and the next line. */
 interface Path {
   from: number;
   to: number;
   color: number;
-  /** Parte do commit (aresta para um pai), não uma lane que só passa. */
+  /** Part of the commit (an edge to a parent), not a lane that just passes. */
   edge: boolean;
 }
 
@@ -110,10 +110,10 @@ function glyph({up, down, left, right}: Dirs): string {
 }
 
 /**
- * Cada trajeto sobe pela coluna de origem, anda na horizontal e desce pela de
- * destino; as direções de trajetos que se encontram numa célula se somam e
- * `glyph` escolhe o caractere (`├`, `┬`, `┼`...). Lanes que só deslizam uma
- * coluna usam `╱`/`╲` no espaço entre as colunas, quando ele está livre.
+ * Each path goes up the source column, runs horizontally and goes down the
+ * destination column; the directions of paths that meet in a cell add up and
+ * `glyph` picks the character (`├`, `┬`, `┼`...). Lanes that only shift one
+ * column use `╱`/`╲` in the gap between the columns, when it is free.
  */
 function renderConnector(row: GraphRow, width: number): Cell[] {
   const paths = pathsOf(row);
@@ -125,7 +125,7 @@ function renderConnector(row: GraphRow, width: number): Cell[] {
     right: false,
     color: 0,
   }));
-  // Espaço entre a coluna x e a x+1: traço horizontal ou diagonal.
+  // Gap between column x and x+1: horizontal or diagonal stroke.
   const between: Cell[] = Array.from({length: width}, () => ({char: ' ', color: 0}));
 
   const draw = ({from, to, color}: Path) => {
@@ -177,12 +177,12 @@ const ASCII: Record<string, string> = {
   '┼': '+',
 };
 
-/** Troca os caracteres de desenho de caixa por equivalentes ASCII. */
+/** Swaps the box-drawing characters for ASCII equivalents. */
 export function toAscii(cells: Cell[]): Cell[] {
   return cells.map(cell => ({...cell, char: ASCII[cell.char] ?? cell.char}));
 }
 
-/** Texto puro das células, para testes e saída sem cor. */
+/** The cells as plain text, for tests and colorless output. */
 export function cellsToText(cells: Cell[], padTo = 0): string {
   const text = cells.map(c => c.char).join('');
   return text.padEnd(padTo * CELLS_PER_COLUMN);

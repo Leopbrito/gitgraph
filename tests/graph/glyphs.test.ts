@@ -7,7 +7,7 @@ const c = (hash: string, ...parents: string[]): Commit => ({
   hash, parents, author: 'Ana', email: 'a@x', date: '2026-01-01T00:00:00+00:00', subject: hash, body: '',
 });
 
-/** Linhas do grafo (nó e ligação) como texto, sem espaços finais. */
+/** Graph lines (node and connector) as text, without trailing spaces. */
 function draw(commits: Commit[], options: {spaced?: boolean} = {}): string[] {
   const rows = layoutGraph(commits);
   const width = Math.max(...rows.map(r => r.width));
@@ -18,11 +18,11 @@ function draw(commits: Commit[], options: {spaced?: boolean} = {}): string[] {
 }
 
 describe('renderGraphLines', () => {
-  it('desenha histórico linear sem linhas de ligação', () => {
+  it('draws a linear history without connector lines', () => {
     expect(draw([c('a', 'b'), c('b')])).toEqual(['●', '●']);
   });
 
-  it('desenha merge e fork', () => {
+  it('draws a merge and a fork', () => {
     expect(draw([c('M', 'm', 'f'), c('m', 'base'), c('f', 'base'), c('base')])).toEqual([
       '●',
       '├─╮',
@@ -33,8 +33,8 @@ describe('renderGraphLines', () => {
     ]);
   });
 
-  it('desenha octopus merge e o deslizamento das lanes restantes', () => {
-    // Cada raiz que termina faz as lanes da direita deslizarem uma coluna (╱).
+  it('draws an octopus merge and the sliding of the remaining lanes', () => {
+    // Each root that ends makes the lanes on the right slide one column (╱).
     expect(draw([c('O', 'p1', 'p2', 'p3'), c('p1'), c('p2'), c('p3')])).toEqual([
       '●',
       '├─┬─╮',
@@ -46,7 +46,7 @@ describe('renderGraphLines', () => {
     ]);
   });
 
-  it('empurra lanes à direita com ╲ e as traz de volta com ╱', () => {
+  it('pushes lanes to the right with ╲ and brings them back with ╱', () => {
     const commits = [
       c('T0', 'a'),
       c('T1', 'M'),
@@ -73,7 +73,7 @@ describe('renderGraphLines', () => {
     ]);
   });
 
-  it('desenha fork com a lane do pai à esquerda', () => {
+  it('draws a fork with the parent lane on the left', () => {
     expect(draw([c('t1', 'p'), c('t2', 'p'), c('p')])).toEqual([
       '●',
       '│ ●',
@@ -121,7 +121,7 @@ describe('renderGraphLines with spaced lines', () => {
 });
 
 describe('toAscii', () => {
-  it('troca desenho de caixa por ASCII e mantém a cor', () => {
+  it('swaps box drawing for ASCII and keeps the color', () => {
     const cells = [
       {char: '●', color: 3},
       {char: '├', color: 1},
@@ -137,7 +137,7 @@ describe('toAscii', () => {
     expect(ascii.map(c => c.color)).toEqual(cells.map(c => c.color));
   });
 
-  it('não sobra nenhum caractere fora do ASCII nos desenhos de grafo', () => {
+  it('leaves no non-ASCII character in the graph drawings', () => {
     const rows = layoutGraph([
       c('T0', 'a'), c('T1', 'M'), c('T2', 'c'), c('M', 'm0', 'f0'), c('m0'), c('f0'), c('a'), c('c'),
     ]);
@@ -170,13 +170,13 @@ describe('stash nodes', () => {
   });
 });
 
-describe('nó das alterações não commitadas', () => {
-  it('é oco como o do stash, em ASCII vira o', () => {
+describe('uncommitted changes node', () => {
+  it('is hollow like the stash one, and becomes o in ASCII', () => {
     const node = {...c('wip', 'a'), uncommitted: {staged: 1, modified: 0, untracked: 0, conflicted: 0}};
     expect(draw([node, c('a')])).toEqual(['○', '●']);
     const rows = layoutGraph([node, c('a')]);
     const first = rows[0];
-    if (!first) throw new Error('sem linhas');
+    if (!first) throw new Error('no lines');
     expect(cellsToText(toAscii(renderGraphLines(first, first.width).node)).trim()).toBe('o');
   });
 });

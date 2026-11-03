@@ -12,16 +12,16 @@ const c = (hash: string, ...parents: string[]): Commit => ({
   body: '',
 });
 
-/** Resumo legível: coluna do commit e lanes depois da linha. */
+/** Readable summary: the commit's column and the lanes after the row. */
 const summary = (commits: Commit[]) =>
   layoutGraph(commits).map(r => `${r.commit.hash}@${r.column} [${r.lanesAfter.join(',')}]`);
 
 describe('layoutGraph', () => {
-  it('devolve vazio sem commits', () => {
+  it('returns nothing without commits', () => {
     expect(layoutGraph([])).toEqual([]);
   });
 
-  it('mantém histórico linear em uma coluna', () => {
+  it('keeps a linear history in one column', () => {
     expect(summary([c('a', 'b'), c('b', 'c'), c('c')])).toEqual([
       'a@0 [b]',
       'b@0 [c]',
@@ -29,8 +29,8 @@ describe('layoutGraph', () => {
     ]);
   });
 
-  it('abre lane no merge e fecha na base', () => {
-    // M mescla m (main) e f (feature), ambos filhos de base.
+  it('opens a lane at the merge and closes it at the base', () => {
+    // M merges m (main) and f (feature), both children of base.
     expect(summary([c('M', 'm', 'f'), c('m', 'base'), c('f', 'base'), c('base')])).toEqual([
       'M@0 [m,f]',
       'm@0 [base,f]',
@@ -39,7 +39,7 @@ describe('layoutGraph', () => {
     ]);
   });
 
-  it('liga a aresta à lane existente do pai (fork)', () => {
+  it('links the edge to the parent\'s existing lane (fork)', () => {
     const rows = layoutGraph([c('p0', 'p'), c('p1', 'p'), c('p')]);
     expect(rows[1]?.column).toBe(1);
     expect(rows[1]?.edges).toEqual([{parent: 'p', column: 0}]);
@@ -47,16 +47,16 @@ describe('layoutGraph', () => {
     expect(rows[2]?.column).toBe(0);
   });
 
-  it('abre uma lane por pai em octopus merge, e as lanes se compactam depois', () => {
+  it('opens one lane per parent in an octopus merge, and the lanes compact afterwards', () => {
     const rows = layoutGraph([c('O', 'p1', 'p2', 'p3'), c('p1'), c('p2'), c('p3')]);
     expect(rows[0]?.edges.map(e => e.column)).toEqual([0, 1, 2]);
     expect(rows[0]?.width).toBe(3);
-    // Cada raiz que termina faz as lanes da direita deslizarem para a esquerda.
+    // Each root that ends makes the lanes on the right slide to the left.
     expect(rows.slice(1).map(r => r.column)).toEqual([0, 0, 0]);
     expect(rows.slice(1).map(r => r.lanesAfter)).toEqual([['p2', 'p3'], ['p3'], []]);
   });
 
-  it('coloca pontas independentes à direita, sem deslocar lanes existentes', () => {
+  it('puts independent tips on the right, without shifting existing lanes', () => {
     expect(summary([c('t1', 'r1'), c('t2', 'r2'), c('r1'), c('r2')])).toEqual([
       't1@0 [r1]',
       't2@1 [r1,r2]',
@@ -67,13 +67,13 @@ describe('layoutGraph', () => {
     expect(rows[1]?.lanesBefore).toEqual(['r1', 't2']);
   });
 
-  it('reaproveita a coluna 0 com várias raízes', () => {
+  it('reuses column 0 with several roots', () => {
     const rows = layoutGraph([c('x'), c('y')]);
     expect(rows.map(r => r.column)).toEqual([0, 0]);
   });
 
-  it('compacta lanes à esquerda quando uma lane termina', () => {
-    // f vem antes de m: depois que f fecha, a base volta para a coluna 0.
+  it('compacts lanes to the left when a lane ends', () => {
+    // f comes before m: once f closes, the base goes back to column 0.
     const rows = layoutGraph([
       c('M', 'm', 'f'),
       c('f', 'base'),
@@ -92,21 +92,21 @@ describe('layoutGraph', () => {
     expect(rows[3]?.lanesAfter).toEqual(['z']);
   });
 
-  it('mantém lane pendente quando o pai está fora da lista', () => {
-    // Ex.: --max-count cortou o histórico.
+  it('keeps a pending lane when the parent is outside the list', () => {
+    // E.g. --max-count cut the history.
     const rows = layoutGraph([c('a', 'fora')]);
     expect(rows[0]?.lanesAfter).toEqual(['fora']);
   });
 
-  it('registra lanes antes e depois de cada linha', () => {
+  it('records the lanes before and after each row', () => {
     const rows = layoutGraph([c('M', 'm', 'f'), c('m'), c('f')]);
     expect(rows[1]?.lanesBefore).toEqual(['m', 'f']);
     expect(rows[1]?.lanesAfter).toEqual(['f']);
     expect(rows[2]?.lanesBefore).toEqual(['f']);
   });
 
-  it('insere as lanes dos outros pais logo à direita do commit', () => {
-    // A lane 'c' está à direita de M e é empurrada pela nova lane f0.
+  it('inserts the lanes of the other parents right next to the commit', () => {
+    // Lane 'c' is to the right of M and is pushed by the new lane f0.
     const rows = layoutGraph([
       c('T0', 'a'),
       c('T1', 'M'),
@@ -119,21 +119,21 @@ describe('layoutGraph', () => {
     expect(m.edges.map(e => e.column)).toEqual([1, 2]);
   });
 
-  describe('cores', () => {
-    it('a lane mantém a cor ao longo do primeiro pai', () => {
+  describe('colors', () => {
+    it('a lane keeps its color along the first parent', () => {
       const rows = layoutGraph([c('a', 'b'), c('b', 'c'), c('c')]);
       expect(rows.map(r => r.colorsBefore)).toEqual([[0], [0], [0]]);
     });
 
-    it('lanes novas recebem cores novas e as existentes não mudam ao deslizar', () => {
+    it('new lanes get new colors and existing ones do not change when sliding', () => {
       const rows = layoutGraph([c('M', 'm', 'f'), c('m'), c('f')]);
       expect(rows[0]?.colorsAfter).toEqual([0, 1]);
-      // m termina; f desliza da coluna 1 para a 0 e continua com a cor 1.
+      // m ends; f slides from column 1 to 0 and keeps color 1.
       expect(rows[1]?.colorsAfter).toEqual([1]);
       expect(rows[2]?.colorsBefore).toEqual([1]);
     });
 
-    it('pontas independentes recebem cores diferentes', () => {
+    it('independent tips get different colors', () => {
       const rows = layoutGraph([c('t1', 'r1'), c('t2', 'r2')]);
       expect(rows[0]?.colorsBefore).toEqual([0]);
       expect(rows[1]?.colorsBefore).toEqual([0, 1]);
