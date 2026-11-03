@@ -691,7 +691,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
     else if (input === 'c' && notACommit('não há o que fazer checkout')) return;
     else if (input === 'c' && commit?.stash) setNotice('um stash não pode ser usado em checkout');
     else if (input === 'c' && commit && !loading) {
-      const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips);
+      const targets = checkoutTargets(commit.hash, refsOf(commit.hash), tips, data.refs.remotes);
       const only = targets.length === 1 ? targets[0] : undefined;
       if (only && isCurrent(only, data.refs.head)) {
         setNotice(`já está em ${describeTarget(only)}`);

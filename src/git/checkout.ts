@@ -19,11 +19,14 @@ export type CheckoutTarget =
  * Remote-only tips with no local branch end up detached.
  *
  * `tips` maps each local branch to its tip commit (see `localBranchTips`).
+ * `remotes` are the names in `git remote`: a remote ref only matches a local
+ * branch through one of them. Without it every `/` is tried as a boundary.
  */
 export function checkoutTargets(
   hash: string,
   refs: Ref[],
   tips: ReadonlyMap<string, string>,
+  remotes?: readonly string[],
 ): CheckoutTarget[] {
   const byName = (a: string, b: string) => a.localeCompare(b);
   const here = refs
@@ -33,7 +36,7 @@ export function checkoutTargets(
 
   const pulls: {name: string; remote: string}[] = [];
   for (const ref of refs.filter(r => r.kind === 'remote').map(r => r.name).sort(byName)) {
-    const pair = localCounterpart(ref, tips);
+    const pair = localCounterpart(ref, tips, remotes);
     if (pair && tips.get(pair.name) !== hash) pulls.push(pair);
   }
 
@@ -54,15 +57,20 @@ export function checkoutTargets(
 /**
  * The local branch a remote ref `remote/branch` corresponds to. The remote
  * name is what comes before the first slash that leaves an existing local
- * branch, so branch names containing slashes (`origin/feature/x`) work.
+ * branch, so branch names containing slashes (`origin/feature/x`) work. When
+ * the remotes are known the prefix must be one of them: otherwise
+ * `origin/feature/x` would be taken for the unrelated local branch `x`.
  */
 function localCounterpart(
   remoteRef: string,
   tips: ReadonlyMap<string, string>,
+  remotes?: readonly string[],
 ): {name: string; remote: string} | null {
   for (let i = remoteRef.indexOf('/'); i !== -1; i = remoteRef.indexOf('/', i + 1)) {
+    const remote = remoteRef.slice(0, i);
     const name = remoteRef.slice(i + 1);
-    if (tips.has(name)) return {name, remote: remoteRef.slice(0, i)};
+    if (remotes && !remotes.includes(remote)) continue;
+    if (tips.has(name)) return {name, remote};
   }
   return null;
 }

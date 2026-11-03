@@ -22,6 +22,8 @@ export function parseAheadBehind(text: string): {ahead: number; behind: number} 
 export interface RefInfo {
   /** Refs agrupadas pelo hash do commit apontado. */
   byCommit: Map<string, Ref[]>;
+  /** Names in `git remote`; tells `origin/feature/x` (remote `origin`) from a remote called `origin/feature`. */
+  remotes?: string[];
   /**
    * HEAD's commit (null in a repository without commits), the current branch
    * (null when detached) and whether a merge is in progress.
@@ -90,8 +92,10 @@ export async function loadRefs(cwd: string): Promise<RefInfo> {
   }
   const upstream = branch === null ? undefined : await loadUpstream(cwd);
   const operation = await operationInProgress(cwd);
+  const remotes = (await git(['remote'], cwd).catch(() => '')).split('\n').filter(name => name !== '');
   return {
     byCommit,
+    remotes,
     head: {hash, branch, merging: operation === 'merge', ...(operation && {operation}), ...(upstream && {upstream})},
   };
 }

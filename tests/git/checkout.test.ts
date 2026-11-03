@@ -98,6 +98,24 @@ describe('checkoutTargets with a remote branch out of sync with the local one', 
     });
   });
 
+  it('does not pair origin/feature/x with an unrelated local branch x', () => {
+    const tips = new Map([['x', 'old']]);
+    expect(checkoutTargets('new', [remote('origin/feature/x')], tips, ['origin'])).toEqual([
+      {kind: 'detach', hash: 'new'},
+    ]);
+    // Without knowing the remotes it still guesses, as before.
+    expect(checkoutTargets('new', [remote('origin/feature/x')], tips)[0]).toMatchObject({kind: 'pull', name: 'x'});
+  });
+
+  it('pairs through a remote whose name has a slash', () => {
+    const tips = new Map([['x', 'old']]);
+    expect(checkoutTargets('new', [remote('my/remote/x')], tips, ['my/remote'])[0]).toEqual({
+      kind: 'pull',
+      name: 'x',
+      remote: 'my/remote',
+    });
+  });
+
   it('offers one pull per remote that is out of sync', () => {
     const tips = new Map([['main', 'old']]);
     const targets = checkoutTargets('new', [remote('upstream/main'), remote('origin/main')], tips);
@@ -235,6 +253,7 @@ describe('checkout with pull', () => {
       remoteTip,
       refs.byCommit.get(remoteTip) ?? [],
       localBranchTips(refs.byCommit),
+      refs.remotes,
     );
     expect(targets[0]).toEqual(pull);
 
