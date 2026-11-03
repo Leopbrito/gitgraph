@@ -1,7 +1,7 @@
 {
   "name": "git-graph-tui",
   "version": "0.1.0",
-  "description": "CLI que mostra o grafo de branches de um repositório git no terminal, com interface interativa",
+  "description": "A CLI that shows the branch graph of a git repository in the terminal, with an interactive interface",
   "keywords": [
     "git",
     "graph",
