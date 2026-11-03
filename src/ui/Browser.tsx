@@ -280,7 +280,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
       })
       .catch(e => {
         const message = oneLine(e instanceof Error ? e.message : String(e));
-        // The switch happened and only the pull failed: refresh so HEAD is right.
+        // The switch happened and only the fast-forward failed: refresh so HEAD is right.
         if (e instanceof PartialCheckoutError) reload(revs, limit, false, {follow: true});
         // After reload(), which clears the error when it starts.
         setError(message);

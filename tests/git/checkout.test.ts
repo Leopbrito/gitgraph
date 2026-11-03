@@ -150,9 +150,9 @@ describe('isCurrent and describeTarget', () => {
 
   it('describes pull and unsynced options', () => {
     const pull: CheckoutTarget = {kind: 'pull', name: 'main', remote: 'origin'};
-    expect(describeOption(pull)).toBe('main e pull de origin/main');
+    expect(describeOption(pull)).toBe('main e avançar até origin/main');
     expect(describeTarget(pull)).toBe('main (atualizada de origin/main)');
-    expect(describeOption({kind: 'branch', name: 'main', unsynced: true})).toBe('main (sem pull)');
+    expect(describeOption({kind: 'branch', name: 'main', unsynced: true})).toBe('main (sem avançar)');
     expect(describeOption({kind: 'branch', name: 'main'})).toBe('main');
     expect(describeOption({kind: 'detach', hash: 'abcdef1234'})).toBe(
       'abcdef1 (HEAD destacado neste commit)',
@@ -262,6 +262,27 @@ describe('checkout with pull', () => {
     expect(run('rev-parse', 'HEAD')).toBe(remoteTip);
   });
 
+  it('does not need the network: the remote can be gone', async () => {
+    const {dir, run, remoteTip} = behindRemote();
+    run('remote', 'set-url', 'origin', '/nonexistent/remote');
+    await checkout(dir, pull);
+    expect(run('rev-parse', 'HEAD')).toBe(remoteTip);
+  });
+
+  it('stops at the selected commit even if the remote moved on after the last fetch', async () => {
+    const {dir, run, remoteTip} = behindRemote();
+    const remote = run('remote', 'get-url', 'origin');
+    const other = mkdtempSync(join(tmpdir(), 'gitgraph-clone2-'));
+    cleanups.push(() => rmSync(other, {recursive: true, force: true}));
+    sh(tmpdir(), 'clone', '-q', remote, other);
+    sh(other, 'config', 'commit.gpgsign', 'false');
+    sh(other, 'commit', '--allow-empty', '-q', '-m', 'even newer');
+    sh(other, 'push', '-q', 'origin', 'main');
+    await checkout(dir, pull);
+    // A pull would have gone to "even newer"; this stays at what the graph showed.
+    expect(run('rev-parse', 'HEAD')).toBe(remoteTip);
+  });
+
   it('switches to the branch first when HEAD is somewhere else', async () => {
     const {dir, run, remoteTip} = behindRemote();
     run('checkout', '-q', '-b', 'other');
@@ -288,7 +309,7 @@ describe('checkout with pull', () => {
 
     const failure = checkout(dir, pull);
     await expect(failure).rejects.toBeInstanceOf(PartialCheckoutError);
-    await expect(failure).rejects.toThrow(/checkout feito para main, mas o pull falhou.*fast-forward/s);
+    await expect(failure).rejects.toThrow(/checkout feito para main, mas não deu para avançar até origin\/main.*fast-forward/s);
     // The switch happened; nothing was merged or rebased.
     expect(run('branch', '--show-current')).toBe('main');
     expect(run('rev-parse', 'HEAD')).toBe(localTip);

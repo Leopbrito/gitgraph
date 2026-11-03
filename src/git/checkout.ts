@@ -6,7 +6,7 @@ export type CheckoutTarget =
   /** `unsynced`: the local branch is not at the selected commit (its remote is). */
   | {kind: 'branch'; name: string; unsynced?: true}
   | {kind: 'detach'; hash: string}
-  /** Switch to the local branch, then `git pull --ff-only <remote> <name>`. */
+  /** Switch to the local branch, then fast-forward it to `<remote>/<name>` (the remote-tracking ref, no network). */
   | {kind: 'pull'; name: string; remote: string};
 
 /**
@@ -99,9 +99,9 @@ export function describeTarget(target: CheckoutTarget): string {
 export function describeOption(target: CheckoutTarget): string {
   switch (target.kind) {
     case 'branch':
-      return target.unsynced ? `${target.name} (sem pull)` : target.name;
+      return target.unsynced ? `${target.name} (sem avançar)` : target.name;
     case 'pull':
-      return `${target.name} e pull de ${target.remote}/${target.name}`;
+      return `${target.name} e avançar até ${target.remote}/${target.name}`;
     case 'detach':
       return `${target.hash.slice(0, 7)} (HEAD destacado neste commit)`;
   }
@@ -127,7 +127,10 @@ export class PartialCheckoutError extends Error {}
 /**
  * Never forces: git itself refuses when local changes would be overwritten or
  * when the branch is checked out in another worktree, and that message is the
- * rejection reason. The pull only fast-forwards, so it never merges or rebases.
+ * rejection reason. The update is `git merge --ff-only <remote>/<branch>`: it
+ * only fast-forwards (never a merge commit or a rebase), reaches exactly the
+ * commit the remote-tracking ref points at, which is the one that was selected,
+ * and does not touch the network (the fetch, `f`, is what moves that ref).
  */
 export async function checkout(cwd: string, target: CheckoutTarget): Promise<void> {
   if (target.kind === 'detach') {
@@ -137,11 +140,11 @@ export async function checkout(cwd: string, target: CheckoutTarget): Promise<voi
   await git(['switch', target.name], cwd);
   if (target.kind === 'pull') {
     try {
-      await git(['pull', '--ff-only', target.remote, target.name], cwd, {network: true});
+      await git(['merge', '--ff-only', `${target.remote}/${target.name}`], cwd);
     } catch (error) {
       const reason = summarizeGitError(error instanceof Error ? error.message : String(error));
       throw new PartialCheckoutError(
-        `checkout feito para ${target.name}, mas o pull falhou: ${reason}`,
+        `checkout feito para ${target.name}, mas não deu para avançar até ${target.remote}/${target.name}: ${reason}`,
       );
     }
   }

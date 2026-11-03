@@ -466,8 +466,8 @@ describe('Browser', () => {
         await press(stdin, 'j', 'j', 'c');
         const frame = lastFrame() ?? '';
         expect(frame).toContain('Branch local e remota estão em commits diferentes');
-        expect(frame).toContain('> feature e pull de origin/feature');
-        expect(frame).toContain('feature (sem pull)');
+        expect(frame).toContain('> feature e avançar até origin/feature');
+        expect(frame).toContain('feature (sem avançar)');
         expect(frame).toContain('HEAD destacado neste commit');
 
         await press(stdin, '\r');
