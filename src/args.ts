@@ -1,5 +1,6 @@
 import {parseArgs} from 'node:util';
 import type {FileConfig} from './config.js';
+import {CONTEXT_TITLES, shortcutLines} from './ui/keymap.js';
 import {DATE_STYLES, type DateStyle} from './ui/date.js';
 import {COMMIT_ORDERS, type CommitOrder, type LogFilters} from './git/log.js';
 
@@ -39,41 +40,93 @@ export interface CliOptions {
 /** Erro de uso da linha de comando (a CLI sai com código 2). */
 export class UsageError extends Error {}
 
-export const HELP = `gitgraph: mostra o grafo de branches do repositório git atual no terminal.
+export const OPTIONS = {
+    directory: {type: 'string', short: 'C'},
+    author: {type: 'string'},
+    since: {type: 'string'},
+    until: {type: 'string'},
+    'first-parent': {type: 'boolean'},
+    'no-remotes': {type: 'boolean'},
+    'no-tags': {type: 'boolean'},
+    'max-count': {type: 'string', short: 'n'},
+    color: {type: 'boolean'},
+    'no-color': {type: 'boolean'},
+    ascii: {type: 'boolean'},
+    'no-ascii': {type: 'boolean'},
+    compact: {type: 'boolean'},
+    'no-compact': {type: 'boolean'},
+    stash: {type: 'boolean'},
+    uncommitted: {type: 'boolean'},
+    'no-uncommitted': {type: 'boolean'},
+    order: {type: 'string'},
+    date: {type: 'string'},
+    'no-stash': {type: 'boolean'},
+    watch: {type: 'boolean'},
+    'no-watch': {type: 'boolean'},
+    mouse: {type: 'boolean'},
+    'no-mouse': {type: 'boolean'},
+    help: {type: 'boolean', short: 'h'},
+    version: {type: 'boolean', short: 'v'},
+} as const;
 
-Uso: gitgraph [opções] [<revisão>...] [-- <caminho>...]
+/** Every option with the text for `--help`, in the order shown. A test checks that each key of OPTIONS is mentioned. */
+const OPTION_DOCS: [flags: string, text: string][] = [
+  ['-C, --directory <caminho>', 'abre o repositório de outro diretório, sem precisar de cd'],
+  ['-n, --max-count <n>', 'mostra no máximo n commits (padrão: sem limite)'],
+  ['--author <padrão>', 'só commits cujo autor casa com o padrão (regex, como no git log)'],
+  ['--since <data>', 'só commits depois da data ("2 weeks ago", 2026-01-31)'],
+  ['--until <data>', 'só commits até a data'],
+  ['--first-parent', 'segue só o primeiro pai de cada merge'],
+  ['--no-remotes', 'esconde as branches remotas'],
+  ['--no-tags', 'esconde as tags'],
+  ['--order <ordem>', 'ordem dos commits: date (padrão), author-date ou topo'],
+  ['--date <formato>', 'formato das datas: short (padrão), iso ou relative (há 3 dias)'],
+  ['--color, --no-color', 'liga / desliga as cores (NO_COLOR também desliga)'],
+  ['--ascii, --no-ascii', 'usa só caracteres ASCII no grafo e na interface'],
+  ['--compact, --no-compact', 'uma linha por commit, sem a linha de ligação entre eles'],
+  ['--stash, --no-stash', 'mostra / esconde os stashes no grafo'],
+  ['--uncommitted, --no-uncommitted', 'mostra / esconde o nó das alterações não commitadas'],
+  ['--watch, --no-watch', 'recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)'],
+  ['--mouse, --no-mouse', 'liga / desliga o mouse (sem ele o terminal volta a selecionar texto)'],
+  ['-h, --help', 'mostra esta ajuda'],
+  ['-v, --version', 'mostra a versão'],
+];
 
-Sem revisões mostra todas as branches, remotas e tags. Com revisões (main, feature-x,
-v1.0..main, um hash) mostra só o que é alcançável delas; após -- limita o histórico
-a commits que mexeram nos caminhos.
+function optionLines(): string[] {
+  const width = Math.max(...OPTION_DOCS.map(([flags]) => flags.length));
+  return OPTION_DOCS.map(([flags, text]) => `  ${flags.padEnd(width)}  ${text}`);
+}
 
-Opções:
-  -C <caminho>         abre o repositório de outro diretório, sem precisar de cd
-      --author <padrão>  só commits cujo autor casa com o padrão (regex, como no git log)
-      --since <data>   só commits depois da data ("2 weeks ago", 2026-01-31)
-      --until <data>   só commits até a data
-      --first-parent   segue só o primeiro pai de cada merge
-      --no-remotes     esconde as branches remotas
-      --no-tags        esconde as tags
-  -n, --max-count <n>  mostra no máximo n commits (padrão: sem limite)
-      --no-color       desliga as cores (também vale a variável NO_COLOR); --color liga
-      --ascii          usa só caracteres ASCII no grafo (--no-ascii desfaz)
-      --compact        uma linha por commit, sem a linha de ligação entre eles (--no-compact desfaz)
-      --date <formato> formato das datas: short (padrão), iso ou relative (há 3 dias)
-      --order <ordem>  ordem dos commits: date (padrão), author-date ou topo
-      --no-stash       não mostra os stashes no grafo (--stash mostra)
-      --no-uncommitted não mostra o nó das alterações não commitadas (--uncommitted mostra)
-      --watch          recarrega o grafo sozinho quando o repositório muda (r recarrega à mão)
-      --no-mouse       desliga o mouse (clique e roda); o terminal volta a selecionar texto
-  -h, --help           mostra esta ajuda
-  -v, --version        mostra a versão
+/** The shortcuts, from the same table as the footer and the help screen. */
+function shortcutSections(): string[] {
+  return (['list', 'commit', 'diff', 'dialog'] as const).flatMap(context => [
+    '',
+    `${CONTEXT_TITLES[context]}:`,
+    ...shortcutLines(context).map(line => `  ${line}`),
+  ]);
+}
 
-Padrões podem ficar em $XDG_CONFIG_HOME/gitgraph/config.json (ou ~/.config/gitgraph/config.json);
-as opções da linha de comando têm precedência sobre o arquivo.
-
-No terminal a interface é interativa (j/k, setas, PgUp/PgDn, g/G, Enter abre os
-arquivos e o diff do commit, s busca commits e n/N navegam pelos resultados, / filtra por branch, q sai). Com a saída redirecionada (pipe), imprime texto puro.
-`;
+export const HELP = [
+  'gitgraph: mostra o grafo de branches do repositório git atual no terminal.',
+  '',
+  'Uso: gitgraph [opções] [<revisão>...] [-- <caminho>...]',
+  '',
+  'Sem revisões mostra todas as branches, remotas e tags. Com revisões (main, feature-x,',
+  'v1.0..main, um hash) mostra só o que é alcançável delas; após -- limita o histórico',
+  'a commits que mexeram nos caminhos.',
+  '',
+  'Opções:',
+  ...optionLines(),
+  '',
+  'Padrões podem ficar em $XDG_CONFIG_HOME/gitgraph/config.json (ou ~/.config/gitgraph/config.json);',
+  'as opções da linha de comando têm precedência sobre o arquivo.',
+  '',
+  'No terminal a interface é interativa; com a saída redirecionada (pipe), imprime texto puro.',
+  '',
+  'Teclas (a tecla ? mostra esta lista dentro da interface):',
+  ...shortcutSections(),
+  '',
+].join('\n');
 
 /**
  * `config` is read only when the command line is not just --help/--version, so a broken
@@ -93,34 +146,7 @@ export function parseCliArgs(
     ({values, positionals} = parseArgs({
       args: dashes === -1 ? argv : argv.slice(0, dashes),
       allowPositionals: true,
-      options: {
-        directory: {type: 'string', short: 'C'},
-        author: {type: 'string'},
-        since: {type: 'string'},
-        until: {type: 'string'},
-        'first-parent': {type: 'boolean'},
-        'no-remotes': {type: 'boolean'},
-        'no-tags': {type: 'boolean'},
-        'max-count': {type: 'string', short: 'n'},
-        color: {type: 'boolean'},
-        'no-color': {type: 'boolean'},
-        ascii: {type: 'boolean'},
-        'no-ascii': {type: 'boolean'},
-        compact: {type: 'boolean'},
-        'no-compact': {type: 'boolean'},
-        stash: {type: 'boolean'},
-        uncommitted: {type: 'boolean'},
-        'no-uncommitted': {type: 'boolean'},
-        order: {type: 'string'},
-        date: {type: 'string'},
-        'no-stash': {type: 'boolean'},
-        watch: {type: 'boolean'},
-        'no-watch': {type: 'boolean'},
-        mouse: {type: 'boolean'},
-        'no-mouse': {type: 'boolean'},
-        help: {type: 'boolean', short: 'h'},
-        version: {type: 'boolean', short: 'v'},
-      },
+      options: OPTIONS,
     }));
   } catch (error) {
     throw new UsageError(translate(error));

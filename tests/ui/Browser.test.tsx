@@ -1224,6 +1224,51 @@ describe('Browser', () => {
     expect(lastFrame()).not.toContain('todas as branches');
   });
 
+  describe('help screen (?)', () => {
+    it('? opens it with every section and ? or Esc closes it', async () => {
+      const {stdin, lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, '?');
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('gitgraph · ajuda');
+      expect(frame).toContain('Lista de commits');
+      expect(frame).toContain('move a seleção');
+      expect(frame).not.toContain('1/5');
+      await press(stdin, '?');
+      expect(lastFrame()).toContain('1/5');
+      expect(lastFrame()).not.toContain('gitgraph · ajuda');
+      await press(stdin, '?', '\u001B');
+      expect(lastFrame()).toContain('1/5');
+    });
+
+    it('the list keys do nothing while it is open, and it scrolls when it does not fit', async () => {
+      const {stdin, lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      await press(stdin, '?', 'j', 'q');
+      // q closes the help (it does not quit the program), and j scrolled the help, not the list.
+      expect(lastFrame()).toContain('1/5');
+      await press(stdin, '?', 'G');
+      // The last section is in view after jumping to the end.
+      expect(lastFrame()).toContain('campos de nome e de busca');
+      await press(stdin, 'g');
+      expect(lastFrame()).toContain('Lista de commits');
+    });
+
+    it('uses words instead of arrows with --ascii', async () => {
+      const {stdin, lastFrame} = render(
+        <DisplayContext.Provider value={{color: false, ascii: true, spaced: true}}>
+          <Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />
+        </DisplayContext.Provider>,
+      );
+      await press(stdin, '?');
+      expect(lastFrame()).toContain('j / Down');
+      expect(lastFrame()).not.toMatch(/[↑↓←→]/);
+    });
+
+    it('the footer of the list points to it', () => {
+      const {lastFrame} = render(<Browser initial={data(5)} initialLimit={100} load={vi.fn<LoadGraph>()} />);
+      expect(lastFrame()).toContain('? ajuda');
+    });
+  });
+
   describe('wide graphs', () => {
     // 50 tips, each waiting for its own parent that shows up later: 50 open lanes, about twice the
     // 26 columns a 100-column terminal leaves for the graph.

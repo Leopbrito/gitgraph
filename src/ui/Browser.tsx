@@ -33,6 +33,8 @@ import {CommitDetail, DETAIL_LINES} from './CommitDetail.js';
 import {CommitView} from './CommitView.js';
 import {separator, tint, useDisplay} from './display.js';
 import {headLabel} from './format.js';
+import {HelpView} from './HelpView.js';
+import {footerHint as listFooter} from './keymap.js';
 import {GraphRowView} from './GraphRowView.js';
 import {MergePrompt} from './MergePrompt.js';
 import {followCommit} from './follow.js';
@@ -127,6 +129,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const [conflict, setConflict] = useState<{files: string[]; index: number} | null>(null);
   const [viewing, setViewing] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [helping, setHelping] = useState(false);
   const [refMode, setRefMode] = useState<RefMode | null>(null);
   // Cherry-pick and revert ask first; reset has its own prompt.
   const [replaying, setReplaying] = useState<{op: 'cherry-pick' | 'revert'; commit: Commit} | null>(null);
@@ -418,7 +421,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   const onMouse = useRef<(event: MouseEvent) => void>(() => {});
   onMouse.current = event => {
     // Only the list answers to the mouse; dialogs and the commit view use the keyboard.
-    if (viewing || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped || replaying || resetting) return;
+    if (viewing || helping || prompt || mergePrompt || conflict || picker || typing || dropping || refMode || stopped || replaying || resetting) return;
     if (event.type === 'click') {
       const index = itemAt(heights, offset, event.row - LIST_TOP, listHeight);
       if (index === null) return;
@@ -437,8 +440,8 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
   useEffect(() => watch?.subscribe(() => refresh.current('atualizado (o repositório mudou)')), [watch]);
 
   useInput((input, key) => {
-    // The commit view has its own keys.
-    if (viewing) return;
+    // The commit view and the help screen have their own keys.
+    if (viewing || helping) return;
 
     // The ref manager handles its own keys.
     if (refMode) return;
@@ -652,6 +655,7 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         else setReplaying({op: input === 'C' ? 'cherry-pick' : 'revert', commit});
       }
     }
+    else if (input === '?') setHelping(true);
     else if (input === 'r') refresh.current('atualizado');
     else if (input === 's') {
       setTyping({origin: cursor.selected, previous: query});
@@ -748,7 +752,9 @@ export function Browser({initial, initialLimit, initialRevs = [], filters = [], 
         : picker
           ? `digite filtra ${dot} ${arrows} escolhe ${dot} Espaço marca ${dot} Enter aplica ${dot} Esc cancela`
           : (notice ??
-            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}j/k ${arrows} mover ${dot} Enter abre ${dot} r atualiza ${dot} s busca ${dot} c checkout ${dot} m merge ${dot} / branch ${dot} q sair`);
+            `${query === '' ? '' : `n/N próximo/anterior ${dot} Esc limpa a busca ${dot} `}${listFooter(dot, display.ascii)}`);
+
+  if (helping) return <HelpView onClose={() => setHelping(false)} />;
 
   if (viewing && commit) {
     return (

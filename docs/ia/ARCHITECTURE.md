@@ -89,6 +89,8 @@ src/
     search.ts      # matchesCommit()/findMatches()/firstFrom()/nextMatch(): busca em memória nos commits carregados (puro)
     SearchPrompt.tsx # campo de busca (ocupa o lugar do painel de detalhes)
     date.ts        # formatDate()/relativeDate(): datas curta, ISO e relativa (puro, o relógio é parâmetro)
+    keymap.ts      # SHORTCUTS: a tabela única de atalhos (rodapé, tela de ajuda e --help saem dela); footerHint(), shortcutLines()
+    HelpView.tsx   # tela de ajuda (?) com rolagem, gerada da tabela
     format.ts      # etiquetas de refs (HEAD, branches, remotos, tags)
     plain.ts       # formatPlain(): mesma saída em texto puro, para pipes (aceita ascii)
 tests/
@@ -123,6 +125,12 @@ Com `spaced` (padrão da CLI), a linha de ligação existe depois de **todo** co
 ### Grafos largos (`h`/`l`)
 
 Com muitas lanes abertas o grafo passa da largura do terminal e empurra o texto do commit para fora. A issue dava duas saídas, e a implementação usa as duas: **o texto tem prioridade** (`visibleColumns` reserva `MIN_TEXT_WIDTH` = 48 caracteres para marcador, hash, assunto e autor e dá o resto, em colunas de 2 caracteres, ao grafo, nunca menos de 4) e **o grafo rola** (`h`/`l` ou `←`/`→`, `PAN_STEP` = 2 colunas). `Browser` guarda só `graphOffset`; `graphStart = clampOffset(...)` é recalculado a cada render, então redimensionar o terminal não deixa a janela fora do grafo (mesma ideia do `scrollIntoView`). `GraphRowView` recebe `columnWindow` e fatia as células **depois** de `toAscii` (cada coluna são 2 células: glifo e separador), então vale para ASCII e para a linha de ligação; o padding passa a ser a largura da janela. `select()` chama `followColumn` com a coluna do nó do commit selecionado: o nó nunca fica fora de vista ao navegar, mas o usuário pode rolar à mão para outro lado e só perde isso ao mover a seleção. O cabeçalho mostra `grafo a-b/total (h/l)` só quando há recorte. O `panGraph` usa atualização funcional para que teclas seguidas antes de um render contem todas. A saída por pipe não é afetada, e as lanes cortadas não aparecem (as ligações de uma lane escondida somem junto), o que é o custo de priorizar o texto.
+
+### Atalhos, ajuda e `--help`
+
+`ui/keymap.ts` tem a **única** tabela de teclas (`SHORTCUTS`: contexto, como a tecla é escrita, os caracteres que o código trata, descrição e, opcionalmente, o texto curto do rodapé). Três coisas saem dela: o **rodapé** da lista (`footerHint`: só as entradas com `footer`, para caber em ~100 colunas), a **tela de ajuda** (`HelpView`, aberta por `?`, com todas as seções, rolagem e `?`/`Esc`/`q` para fechar) e o **`--help`** (`args.ts` monta o `HELP` a partir de `OPTION_DOCS` e de `shortcutLines`). Com `--ascii` as setas viram palavras (`asciiKeys`). As opções do parser também ficam numa constante exportada, `OPTIONS`.
+
+Para a tabela não ficar velha há testes em `tests/ui/keymap.test.ts`: um varre `src/ui/*.tsx` atrás de `input === '<c>'` e exige que **toda tecla tratada conste** na tabela (e que nenhuma entrada cite uma tecla que ninguém trata); outro exige que o `--help` cite todas as chaves de `OPTIONS`. Ao criar uma tecla, o teste falha até a tabela ser atualizada. Limite: o teste vê só comparações com `input === 'x'` de um caractere, não as teclas especiais (setas, Enter, Tab), que ficam por conta da revisão.
 
 ### Interação (TTY)
 

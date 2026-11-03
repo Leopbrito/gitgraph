@@ -86,6 +86,8 @@ A precedência é **padrões do programa < arquivo < opções da linha de comand
 
 ### Teclas (modo interativo)
 
+O rodapé mostra só as principais; **`?` abre a lista completa** dentro da interface e `gitgraph --help` a imprime junto das opções. As três saem da mesma tabela (`src/ui/keymap.ts`), então não divergem.
+
 | Tecla | Ação |
 | --- | --- |
 | `j` / `↓`, `k` / `↑` | Move a seleção |
@@ -107,6 +109,7 @@ A precedência é **padrões do programa < arquivo < opções da linha de comand
 | `s` | Busca commits por mensagem (assunto e corpo), autor, e-mail ou hash, sem diferenciar maiúsculas: digite e a seleção pula para o primeiro resultado a partir de onde você estava; `Enter` confirma, `Esc` cancela e volta. |
 | `n` / `N` | Próximo / anterior resultado da busca (o `n` carrega mais histórico se precisar; ao fim do histórico voltam ao outro lado). `Esc` limpa a busca. |
 | `/` | Filtra por uma ou mais branches: digite para buscar, `↑`/`↓` movem, `Espaço` marca/desmarca, `Enter` aplica, `Esc` cancela |
+| `?` | Abre a **tela de ajuda** com todas as teclas (rola com `j`/`k`/`PgUp`/`PgDn`; `?`, `Esc` ou `q` fecham). A mesma lista sai em `gitgraph --help`. |
 | `q` | Sai |
 
 **Mouse.** Clique em um commit para selecioná-lo, dê **duplo clique** para abrir a visão do commit (como `Enter`) e use a roda para mover a seleção (3 commits por passo). Na **visão do commit**, clique em um arquivo para selecioná-lo (ou na mensagem, para focá-la), dê duplo clique para abrir o diff dele e use a roda para rolar a mensagem ou mover a seleção de arquivos. Com um diálogo ou o diff aberto, o mouse é ignorado. Com o mouse ligado o terminal não seleciona texto por arraste; segure `Shift` (`Option` no iTerm2 e no Terminal do macOS) ou use `--no-mouse`.
