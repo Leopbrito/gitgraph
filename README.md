@@ -17,9 +17,20 @@ Num terminal, a interface é interativa; com a saída redirecionada, imprime tex
 ## Requisitos
 
 - Node.js 22 ou superior (exigência do Ink).
-- `git` 2.23 ou superior no `PATH` (o checkout usa `git switch`).
+- `git` 2.31 ou superior no `PATH` (o checkout usa `git switch`, de 2.23, e o `--watch` usa `rev-parse --path-format`, de 2.31).
 
 ## Instalação
+
+```sh
+npm install -g git-graph-tui   # instala o comando `gitgraph`
+gitgraph --version
+```
+
+Ou sem instalar: `npx git-graph-tui` (o comando que ele roda é o mesmo).
+
+O pacote se chama `git-graph-tui` porque o nome `gitgraph` já é de outro pacote no npm; o comando continua sendo `gitgraph`.
+
+### A partir do código-fonte
 
 ```sh
 npm install
@@ -27,7 +38,7 @@ npm run build
 npm link      # opcional: disponibiliza o comando `gitgraph`
 ```
 
-Sem o `npm link`, use `node dist/cli.js` dentro do repositório que quer ver, ou `npm run dev` durante o desenvolvimento.
+Sem o `npm link`, use `node dist/cli.js` dentro do repositório que quer ver, ou `npm run dev` durante o desenvolvimento. Como publicar uma versão: `docs/ia/conventions/release.md`.
 
 ## Uso
 

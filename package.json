@@ -1,20 +1,49 @@
 {
-  "name": "gitgraph",
-  "version": "0.0.0",
-  "description": "CLI que mostra o grafo de branches de um repositório git no terminal",
+  "name": "git-graph-tui",
+  "version": "0.1.0",
+  "description": "CLI que mostra o grafo de branches de um repositório git no terminal, com interface interativa",
+  "keywords": [
+    "git",
+    "graph",
+    "tui",
+    "terminal",
+    "cli",
+    "branches",
+    "commits",
+    "ink"
+  ],
+  "author": "Leonardo Brito",
   "license": "MIT",
+  "homepage": "https://github.com/Leopbrito/gitgraph#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Leopbrito/gitgraph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Leopbrito/gitgraph/issues"
+  },
   "type": "module",
   "bin": {
     "gitgraph": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx src/cli.tsx",
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "ink": "^8.0.0",
