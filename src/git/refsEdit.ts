@@ -54,9 +54,34 @@ export function gitRefActions(cwd: string): RefActions {
       await git(['branch', '-m', '--', from, to], cwd);
     },
     async renameTag(from, to) {
-      // `git tag to from` points the new tag at the same object (the tag object, if annotated), keeping the message.
-      await git(['tag', '--', to, fullName('tag', from)], cwd);
-      await git(['tag', '-d', from], cwd);
+      const [type = '', target = '', name = '', email = '', date = '', subject = '', body = '', signature = ''] = (
+        await git(
+          [
+            'for-each-ref',
+            '--format=%(objecttype)%00%(*objectname)%00%(taggername)%00%(taggeremail)%00%(taggerdate:raw)%00%(contents:subject)%00%(contents:body)%00%(contents:signature)',
+            fullName('tag', from),
+          ],
+          cwd,
+        )
+      ).split('\0');
+      if (type === 'tag') {
+        // An annotated tag records its own name, so a second ref to the same tag object would be
+        // "externally known as" the old name (git warns). Make a new tag object with the same message
+        // and tagger instead. A signature covers the name, so it cannot be carried over.
+        if (signature.trim() !== '') throw new Error(`a tag ${from} é assinada: renomear perderia a assinatura; recrie-a no terminal`);
+        const message = body.trim() === '' ? subject.trim() : `${subject.trim()}\n\n${body.trim()}`;
+        const tagger = {GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email.replace(/^<|>$/g, ''), GIT_COMMITTER_DATE: date};
+        await git(['tag', '-a', '-m', message, '--', to, target], cwd, {env: tagger});
+      } else {
+        await git(['tag', '--', to, fullName('tag', from)], cwd);
+      }
+      try {
+        await git(['tag', '-d', from], cwd);
+      } catch (error) {
+        // Do not leave both tags behind: the rename did not happen.
+        await git(['tag', '-d', to], cwd).catch(() => {});
+        throw error;
+      }
     },
     async deleteBranch(name, force) {
       try {
